@@ -1,6 +1,9 @@
 {
   "dependencies": {
+    "com.apple.unityplugin.core": "file:/Users/dennisrudolph/unityplugins/Build/com.apple.unityplugin.core-3.2.0.tgz",
+    "com.apple.unityplugin.phase": "file:/Users/dennisrudolph/unityplugins/Build/com.apple.unityplugin.phase-1.2.7.tgz",
     "com.unity.ai.navigation": "2.0.11",
+    "com.unity.animation.rigging": "1.4.1",
     "com.unity.collab-proxy": "2.11.4",
     "com.unity.ide.rider": "3.0.39",
     "com.unity.ide.visualstudio": "2.0.27",

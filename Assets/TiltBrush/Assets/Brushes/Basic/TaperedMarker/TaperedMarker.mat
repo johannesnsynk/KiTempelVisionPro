@@ -21,24 +21,34 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: TaperedMarker
-  m_Shader: {fileID: 4800000, guid: 650dd9526735d5b46b79224bc6e94025, type: 3}
+  m_Shader: {fileID: -6465566751694194690, guid: e5bf8593aee88ef41932c0c708089790, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
-  m_InvalidKeywords:
-  - _EMISSION
+  m_InvalidKeywords: []
   m_LightmapFlags: 1
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
   m_CustomRenderQueue: -1
-  stringTagMap:
-    RenderType: Opaque
+  stringTagMap: {}
   disabledShaderPasses:
   - MOTIONVECTORS
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - Texture2D_1:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - Texture2D_7cc1569ec5ab475ebef759959328b817:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _BaseColorTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _BaseMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -79,8 +89,51 @@ Material:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _Texture2D:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_Lightmaps:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_LightmapsInd:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - unity_ShadowMasks:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - Boolean_1: 1
+    - Boolean_10f7618faac4429f94d7ab2e78dfebba: 0
+    - Boolean_1a6115acc30b435faaa4e56e9e741f9e: 1
+    - Boolean_352a5d6dfa47403e809111fcb393fc90: 1
+    - Boolean_35561e464ec84839b6821bad1c357431: 1
+    - Boolean_420d47fff25e4551842d5543b683d9d9: 0
+    - Boolean_a1ab06cca9bc4fca9ec759b8c8814db9: 1
+    - Vector1_01e58a7ff5d94fc9b6d8577144c1afff: 0
+    - Vector1_0bb879fa6a634a34b0513e1a88b01fcc: 0.1
+    - Vector1_0f7e061867ad44748f1d4c935bf4277b: 0
+    - Vector1_1d803cb879f241719aaa5d77a394f7b1: 0.02
+    - Vector1_43ef903fc0274c719a5804685023d093: 3
+    - Vector1_582d3806361f45f5ac72fd7df24aa504: 1
+    - Vector1_7683367b3a324d5397407217add23608: 1
+    - Vector1_7bf1b47183834e3fb0e18f4a7e9f4da9: 100
+    - Vector1_7c69a76ce160452eab312d851a9b8bb4: 0
+    - Vector1_7e140da91b024369b3c2752f10e96ce6: 0.75
+    - Vector1_7f3c652563a6414cbeda3da773603b8f: 0.5
+    - Vector1_81e6058b91064cc08d9391b149a47718: 1118.6
+    - Vector1_8373b74b98a044739c528c2ba5e6f44c: 0
+    - Vector1_9ad13ac4dc80418d801a917ac39565b0: 0.5
+    - Vector1_bccd97528bf74296b30a9cdaf1ba6886: 0
+    - Vector1_cc730e49b7c1403da37194f1459c011e: 0.01
+    - Vector1_e1766899b6b840fa9758dfd102209010: 0
+    - Vector1_f05c193af0124a3dbafb21bcc386a115: 1.81
+    - Vector1_f4399b85a0d841d7a58686dbcb1630ed: 1
+    - Vector1_fdc84e4b47d642d7ab002ce5ab371967: 0
     - _AddPrecomputedVelocity: 0
     - _AlphaClip: 0
     - _AlphaToMask: 0
@@ -92,15 +145,20 @@ Material:
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
     - _DstBlendAlpha: 0
+    - _EmissionGain: 2
     - _GlossMapScale: 1
     - _Glossiness: 0.5
     - _GlossyReflections: 1
     - _Metallic: 0
+    - _MetallicFactor: 1
     - _Mode: 0
     - _OcclusionStrength: 1
     - _Parallax: 0.02
+    - _QueueControl: 0
     - _QueueOffset: 0
+    - _RoughnessFactor: 1
     - _SampleGI: 0
+    - _Smoothness: 0.7
     - _SmoothnessTextureChannel: 0
     - _SpecularHighlights: 1
     - _SrcBlend: 1
@@ -110,8 +168,12 @@ Material:
     - _XRMotionVectorsPass: 1
     - _ZWrite: 1
     m_Colors:
+    - Color_2ca6888f8e6b4df4838a0a56190ca5f2: {r: 1, g: 1, b: 1, a: 0}
+    - White: {r: 1, g: 1, b: 1, a: 1}
     - _BaseColor: {r: 1, g: 0.7282414, b: 0.5518868, a: 1}
+    - _BaseColorFactor: {r: 1, g: 1, b: 1, a: 1}
     - _Color: {r: 1, g: 0.7282414, b: 0.5518868, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - _SpecColor: {r: 0.14117646, g: 0.14117646, b: 0.14117646, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

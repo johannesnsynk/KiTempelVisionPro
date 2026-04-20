@@ -14,9 +14,15 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/Scenes/NikeTest.unity
     guid: 15b1653bc9e804555a00bbcaf4f3b6e8
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/niketestportal.unity
     guid: 178cc8395f71c4ecf8026470d70ca09a
+  - enabled: 0
+    path: "Assets/Scenes/ku\u0308nstlicheGo\u0308tter.unity"
+    guid: a7e781b1be7344c61b669b5904c612bc
+  - enabled: 1
+    path: "Assets/Scenes/ku\u0308nstlicheGo\u0308tter_scene1.unity"
+    guid: f8b2a330a199642d0af0d1459ed36e0f
   m_configObjects:
     UnityEditor.XR.VisionOS.VisionOSSettings: {fileID: 11400000, guid: 8061b08fda71c47abbffeaa495a8cc88, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
