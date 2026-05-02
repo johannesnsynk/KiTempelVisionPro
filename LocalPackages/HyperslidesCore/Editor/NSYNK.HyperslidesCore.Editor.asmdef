@@ -1,0 +1,29 @@
+{
+    "name": "NSYNK.Hyperslides.Editor",
+    "rootNamespace": "",
+    "references": [
+        "Unity.XR.ARFoundation",
+        "Unity.EditorCoroutines.Editor",
+        "UnityMainThreadDispatcher",
+        "Unity.XR.ARSubsystems",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro",
+        "NakamaRuntime",
+        "NakamaEditor",
+        "NSYNK.Hyperslides.Runtime",
+        "Unity.Addressables.Editor",
+        "Unity.Addressables",
+        "Unity.ResourceManager"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

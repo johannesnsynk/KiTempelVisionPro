@@ -1,0 +1,33 @@
+{
+  "name": "com.nsynk.hyperslides-core",
+  "version": "0.9.0",
+  "displayName": "Hyperslides Core Framework",
+  "description": "This is the Hyperslides Unity Core project.",
+  "unity": "6000.0",
+  "documentationUrl": "https://docs.nsynk.de/collection/hyperslides-cZCWm87NKs/recent",
+  "changelogUrl": "https://docs.nsynk.de/doc/changelog-BR66QY9wGn",
+  "licensesUrl": "",
+  "dependencies": {
+    "com.unity.addressables": "2.3.1",
+    "com.unity.xr.arfoundation": "6.0.4",
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.polyspatial.visionos": "2.1.2",
+    "com.unity.render-pipelines.universal": "17.0.3",
+    "com.unity.modules.vr": "1.0.0",
+    "com.unity.modules.xr": "1.0.0",
+    "com.unity.xr.arkit": "6.0.4",
+    "com.unity.xr.hands": "1.5.0",
+    "com.unity.xr.management": "4.5.0"
+  },
+  "keywords": [
+    "Polyspatial",
+    "Vision OS",
+    "Apple Vision Pro"
+  ],
+  "author": {
+    "name": "NSYNK Gesellschaft für Kunst und Technik mbH",
+    "email": "info@nsynk.de",
+    "url": "https://nsynk.de/"
+  },
+  "_fingerprint": "411050f7fab1dd373689f85cf09e9bda0a26b717"
+}

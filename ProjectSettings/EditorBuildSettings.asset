@@ -20,10 +20,14 @@ EditorBuildSettings:
   - enabled: 0
     path: "Assets/Scenes/ku\u0308nstlicheGo\u0308tter.unity"
     guid: a7e781b1be7344c61b669b5904c612bc
-  - enabled: 1
+  - enabled: 0
     path: "Assets/Scenes/ku\u0308nstlicheGo\u0308tter_scene1.unity"
     guid: f8b2a330a199642d0af0d1459ed36e0f
+  - enabled: 1
+    path: Assets/Scenes/1.Akt.unity
+    guid: 46d3d6b12748144b58aca0287ce22727
   m_configObjects:
+    UnityEditor.XR.ARKit.ARKitSettings: {fileID: 11400000, guid: bc411511af9804ad5adc36b74df7f6d5, type: 2}
     UnityEditor.XR.VisionOS.VisionOSSettings: {fileID: 11400000, guid: 8061b08fda71c47abbffeaa495a8cc88, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
     com.unity.polyspatial.xr.xr_settings: {fileID: 11400000, guid: aec4dcfb3120d4462ab82bb7798caf72, type: 2}

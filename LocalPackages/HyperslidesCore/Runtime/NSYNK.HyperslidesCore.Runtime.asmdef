@@ -1,0 +1,28 @@
+{
+    "name": "NSYNK.Hyperslides.Runtime",
+    "rootNamespace": "",
+    "references": [
+        "Unity.XR.ARFoundation",
+        "UnityMainThreadDispatcher",
+        "Unity.XR.ARSubsystems",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro",
+        "NakamaRuntime",
+        "Unity.XR.Hands",
+        "Unity.XR.CoreUtils",
+        "Unity.PolySpatial",
+        "Unity.PolySpatial.Core",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

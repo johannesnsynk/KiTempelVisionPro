@@ -1,0 +1,52 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8036a108df0a4e509ab48f6d3169738, type: 3}
+  m_Name: GlobalSettings
+  m_EditorClassIdentifier: 
+  backend: https://next.hyperslides.de
+  showNameTags: 0
+  NakamaProfile:
+    IP: nakama.hyperslides.de
+    Port: 443
+    SSL: 1
+    ServerKey: ooRB3B*7prh-dAD8Qnz*.UzTY
+  updateRate: 5
+  backupUpdateRate: 5
+  slowUpdateRate: 0.001
+  handSmoothing: 5
+  playerPositionEasing: 5
+  playerRotationEasing: 5
+  playerHeadRotationEasing: 5
+  avatarVisibilityRole: 3
+  avatarPrefab: {fileID: 0}
+  editModeAvatarPrefab: {fileID: 3052004689229848525, guid: 6a0a231b34ba6475dab75b14460ad26a,
+    type: 3}
+  localPointerEasing: 5
+  pointerEasing: 5
+  pointerHideTimer: 1
+  pointerTransparency: 0.5
+  uiTimeout: 2
+  uiFollowEasing: 4
+  uiRotateEasing: 4
+  uiHeadScale: 0.5
+  uiHeadDistance: 0.5
+  uiPresenterNotesOffset: {x: 1, y: -0.25, z: 1}
+  uiHandScale: 0.3
+  uiHandOffset: {x: 0, y: 0.15, z: 0.1}
+  spectatorPositionEasing: 10
+  spectatorRotationEasing: 10
+  syncedTransformEasing: 10
+  syncedValueEasing: 10
+  findWorldmapTimeout: 3
+  showPersonaMarkersOnLobby: 1
+  handheldTrackingType: 1
+  xrTrackingType: 1
