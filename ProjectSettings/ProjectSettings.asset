@@ -578,7 +578,7 @@ PlayerSettings:
   logObjCUncaughtExceptions: 1
   enableCrashReportAPI: 0
   cameraUsageDescription: Nedded for AR.
-  locationUsageDescription: 
+  locationUsageDescription: Needed for spatial placement.
   microphoneUsageDescription: Needed for Avatar.
   bluetoothUsageDescription: 
   macOSTargetOSVersion: 12.0

@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_FullUnityVersion: 
   m_DisablePolySpatial: 0
-  m_PackageVersion: 3.1.4
+  m_PackageVersion: 3.1.5
   m_EnableStatistics: 0
   m_ColliderSyncLayerMask:
     serializedVersion: 2
