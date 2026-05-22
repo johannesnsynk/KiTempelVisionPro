@@ -835,7 +835,8 @@ PlayerSettings:
   webGLCloseOnQuit: 0
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
-  scriptingDefineSymbols: {}
+  scriptingDefineSymbols:
+    VisionOS: CMS_SALSA
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
