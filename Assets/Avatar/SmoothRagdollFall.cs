@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Playables;
-using Apple.PHASE;
+using NSYNK.HyperSlides.Runtime;
 
 [RequireComponent(typeof(Animator))]
 public class RagdollIntroSequence : MonoBehaviour
@@ -10,11 +10,6 @@ public class RagdollIntroSequence : MonoBehaviour
     [Header("References")]
     public PlayableDirector timelineDirector;
     public Animator animator;
-
-    [Header("Audio")]
-    public PHASESource phaseSource;
-    public AvatarDialogue avatarDialogue;
-    public AudioClip dialogueClip;
 
     [Header("Drop Settings")]
     public float dropHeight = 150f;
@@ -29,16 +24,20 @@ public class RagdollIntroSequence : MonoBehaviour
     [Header("Fall Liveliness")]
     [Tooltip("Random angular velocity range applied to each ragdoll body at the start of the fall. Higher = more flailing.")]
     public float initialAngularSpin = 2f;
+
     [Tooltip("Continuous random force applied to limbs during the fall, simulating air buffeting. 0 to disable.")]
     public float airBuffetForce = 0.5f;
+
     [Tooltip("Upward 'air resistance' force applied to extremities (hands, feet, head). Creates the classic skydiver silhouette. 0 to disable.")]
     public float extremityLift = 1.5f;
+
     [Tooltip("How often (in seconds) to apply random buffeting forces. Lower = more chaotic motion.")]
     public float buffetInterval = 0.15f;
 
     [Header("Force Exclusions")]
     [Tooltip("Skip liveliness forces on the left arm (broken Character Joint causes wild spinning).")]
     public bool excludeLeftArm = true;
+
     [Tooltip("Skip liveliness forces on the right arm.")]
     public bool excludeRightArm = false;
 
@@ -55,7 +54,7 @@ public class RagdollIntroSequence : MonoBehaviour
     public float delayBeforeTimeline = 0.1f;
 
     [Header("Debug")]
-    public bool debugLogs = false;
+    public bool debugLogs = true;
 
     private Rigidbody[] ragdollBodies;
     private CharacterController characterController;
@@ -69,8 +68,11 @@ public class RagdollIntroSequence : MonoBehaviour
     private float[] originalAngularDrag;
 
     private HashSet<Transform> excludedFromForces = new HashSet<Transform>();
+
     private bool falling = false;
     private Vector3 originalScenePosition;
+
+    private Coroutine introCoroutine;
 
     void Awake()
     {
@@ -84,22 +86,21 @@ public class RagdollIntroSequence : MonoBehaviour
 
         if (animator != null && animator.isHuman)
             hipsBone = animator.GetBoneTransform(HumanBodyBones.Hips);
-        if (hipsBone == null && ragdollBodies.Length > 0)
-            hipsBone = ragdollBodies[0].transform;
+        if (hipsBone == null && ragdollBodies.Length > 0) hipsBone = ragdollBodies[0].transform;
 
-        boneTransforms = new Transform[ragdollBodies.Length];
+        boneTransforms         = new Transform[ragdollBodies.Length];
         boneBindLocalPositions = new Vector3[ragdollBodies.Length];
         boneBindLocalRotations = new Quaternion[ragdollBodies.Length];
-        originalLinearDrag = new float[ragdollBodies.Length];
-        originalAngularDrag = new float[ragdollBodies.Length];
+        originalLinearDrag     = new float[ragdollBodies.Length];
+        originalAngularDrag    = new float[ragdollBodies.Length];
 
         for (int i = 0; i < ragdollBodies.Length; i++)
         {
-            boneTransforms[i] = ragdollBodies[i].transform;
+            boneTransforms[i]         = ragdollBodies[i].transform;
             boneBindLocalPositions[i] = boneTransforms[i].localPosition;
             boneBindLocalRotations[i] = boneTransforms[i].localRotation;
-            originalLinearDrag[i] = ragdollBodies[i].linearDamping;
-            originalAngularDrag[i] = ragdollBodies[i].angularDamping;
+            originalLinearDrag[i]     = ragdollBodies[i].linearDamping;
+            originalAngularDrag[i]    = ragdollBodies[i].angularDamping;
         }
 
         BuildExclusionSet();
@@ -119,7 +120,6 @@ public class RagdollIntroSequence : MonoBehaviour
             AddIfExists(excludedFromForces, animator.GetBoneTransform(HumanBodyBones.LeftLowerArm));
             AddIfExists(excludedFromForces, animator.GetBoneTransform(HumanBodyBones.LeftHand));
         }
-
         if (excludeRightArm)
         {
             AddIfExists(excludedFromForces, animator.GetBoneTransform(HumanBodyBones.RightUpperArm));
@@ -130,18 +130,92 @@ public class RagdollIntroSequence : MonoBehaviour
 
     void Start()
     {
-        // PHASE erst in Start() – nach Apple.Core Initialisierung
-        if (phaseSource != null)
-            phaseSource.Play();
+        // Start() only runs once — actual sequencing handled by OnEnable
+    }
 
-        if (avatarDialogue != null && dialogueClip != null)
+    void OnEnable()
+    {
+        // Reset state for this activation cycle
+        ResetState();
+
+        var slideElement = GetComponentInParent<XRSlideElement>();
+        if (slideElement != null)
         {
-            avatarDialogue.clip = dialogueClip;
-            avatarDialogue.StartImmediate();
-            Debug.Log($"Audio gestartet in Start – Zeit: {Time.realtimeSinceStartup:F2}s");
+            if (debugLogs) Debug.Log("[RagdollIntro] XRSlideElement gefunden — warte auf FullyVisible.");
+            slideElement.OnVisibilityStateChanged += OnSlideVisibilityChanged;
+        }
+        else
+        {
+            if (debugLogs) Debug.Log("[RagdollIntro] Kein XRSlideElement — starte sofort.");
+            introCoroutine = StartCoroutine(RunIntroSequence());
+        }
+    }
+
+    void OnDisable()
+    {
+        // Stop any running coroutine
+        if (introCoroutine != null)
+        {
+            StopCoroutine(introCoroutine);
+            introCoroutine = null;
         }
 
-        StartCoroutine(RunIntroSequence());
+        // Unsubscribe to avoid duplicate subscriptions on next OnEnable
+        var slideElement = GetComponentInParent<XRSlideElement>();
+        if (slideElement != null)
+            slideElement.OnVisibilityStateChanged -= OnSlideVisibilityChanged;
+
+        // Reset ragdoll back to bind pose
+        ResetState();
+    }
+
+    void ResetState()
+    {
+        falling = false;
+
+        if (animator != null) animator.enabled = true;
+        if (timelineDirector != null) timelineDirector.Stop();
+
+        // Only reset if arrays are initialized (Awake has run)
+        if (ragdollBodies == null) return;
+
+        for (int i = 0; i < ragdollBodies.Length; i++)
+        {
+            if (ragdollBodies[i] == null) continue;
+            ragdollBodies[i].isKinematic = true;
+            ragdollBodies[i].linearVelocity = Vector3.zero;
+            ragdollBodies[i].angularVelocity = Vector3.zero;
+            ragdollBodies[i].linearDamping = originalLinearDrag[i];
+            ragdollBodies[i].angularDamping = originalAngularDrag[i];
+        }
+
+        if (boneTransforms != null)
+        {
+            for (int i = 0; i < boneTransforms.Length; i++)
+            {
+                if (boneTransforms[i] == null) continue;
+                boneTransforms[i].localPosition = boneBindLocalPositions[i];
+                boneTransforms[i].localRotation = boneBindLocalRotations[i];
+            }
+        }
+
+        transform.position = originalScenePosition;
+    }
+
+    void OnSlideVisibilityChanged(XRSlideElement.VisibilityState state)
+    {
+        if (debugLogs) Debug.Log($"[RagdollIntro] SlideElement Visibility: {state}");
+
+        if (state == XRSlideElement.VisibilityState.FullyVisible)
+        {
+            // Unsubscribe — OnDisable will re-subscribe next cycle
+            var slideElement = GetComponentInParent<XRSlideElement>();
+            if (slideElement != null)
+                slideElement.OnVisibilityStateChanged -= OnSlideVisibilityChanged;
+
+            if (debugLogs) Debug.Log("[RagdollIntro] FullyVisible — starte Sequenz.");
+            introCoroutine = StartCoroutine(RunIntroSequence());
+        }
     }
 
     void FixedUpdate()
@@ -157,240 +231,195 @@ public class RagdollIntroSequence : MonoBehaviour
 
     IEnumerator RunIntroSequence()
     {
-        transform.position = originalScenePosition + Vector3.up * dropHeight;
+        transform.position = new Vector3(
+            originalScenePosition.x,
+            originalScenePosition.y + dropHeight,
+            originalScenePosition.z
+        );
 
-        EnableRagdoll(true);
-        ApplyFallTuning(true);
+        if (debugLogs) Debug.Log($"[RagdollIntro] Dropping from height {dropHeight}");
+
+        EnableRagdoll();
         falling = true;
 
-        foreach (var rb in ragdollBodies)
+        // Apply initial impulse
+        if (initialImpulse != Vector3.zero)
         {
-            if (initialImpulse != Vector3.zero)
+            foreach (var rb in ragdollBodies)
                 rb.AddForce(initialImpulse, ForceMode.VelocityChange);
+        }
 
-            if (excludedFromForces.Contains(rb.transform)) continue;
-
-            if (initialAngularSpin > 0f)
+        // Apply initial angular spin
+        if (initialAngularSpin > 0f)
+        {
+            foreach (var rb in ragdollBodies)
             {
-                Vector3 randomSpin = new Vector3(
+                if (excludedFromForces.Contains(rb.transform)) continue;
+                rb.angularVelocity = new Vector3(
                     Random.Range(-initialAngularSpin, initialAngularSpin),
                     Random.Range(-initialAngularSpin, initialAngularSpin),
                     Random.Range(-initialAngularSpin, initialAngularSpin)
                 );
-                rb.angularVelocity = randomSpin;
             }
         }
 
+        // Start buffet coroutine
+        Coroutine buffetCoroutine = null;
         if (airBuffetForce > 0f || extremityLift > 0f)
-            StartCoroutine(ApplyFallForces());
+            buffetCoroutine = StartCoroutine(ApplyAirBuffet());
 
-        yield return StartCoroutine(WaitForRagdollToSettle());
+        // Wait for settle
+        float ragdollTimer = 0f;
+        float settleTimer = 0f;
+
+        while (ragdollTimer < maxRagdollTime)
+        {
+            ragdollTimer += Time.deltaTime;
+
+            float maxVel = 0f;
+            foreach (var rb in ragdollBodies)
+                maxVel = Mathf.Max(maxVel, rb.linearVelocity.magnitude);
+
+            if (maxVel < settleVelocityThreshold)
+            {
+                settleTimer += Time.deltaTime;
+                if (settleTimer >= settleTime) break;
+            }
+            else
+            {
+                settleTimer = 0f;
+            }
+
+            yield return null;
+        }
 
         falling = false;
-        ApplyFallTuning(false);
+
+        if (buffetCoroutine != null)
+            StopCoroutine(buffetCoroutine);
 
         if (debugLogs) Debug.Log("[RagdollIntro] Ragdoll settled.");
 
         yield return new WaitForSeconds(delayBeforeTimeline);
 
-        Vector3[] landedWorldPositions;
-        Quaternion[] landedWorldRotations;
-        CaptureCurrentWorldPose(out landedWorldPositions, out landedWorldRotations);
+        // Blend back to animated pose before timeline
+        if (useBlend && blendDuration > 0f)
+            yield return StartCoroutine(BlendToAnimatedPose());
+        else
+            DisableRagdoll();
 
-        if (debugLogs) Debug.Log($"[RagdollIntro] Captured landed pose. Hips world Y: {landedWorldPositions[0].y:F3}");
-
+        // Ensure avatar is at correct world position before timeline
         transform.position = originalScenePosition;
 
-        EnableRagdoll(false);
-
+        // Play timeline
         if (timelineDirector != null)
         {
-            timelineDirector.time = 0;
+            if (debugLogs) Debug.Log("[RagdollIntro] Playing timeline.");
             timelineDirector.Play();
-            timelineDirector.Pause();
-            if (debugLogs) Debug.Log("[RagdollIntro] Timeline started and paused at frame 0.");
         }
 
-        if (animator != null)
-            animator.Update(0f);
-
-        if (useBlend && blendDuration > 0f)
-        {
-            if (debugLogs) Debug.Log($"[RagdollIntro] Starting blend, duration: {blendDuration}s");
-            yield return StartCoroutine(BlendFromRagdollPose(landedWorldPositions, landedWorldRotations, blendDuration));
-            if (debugLogs) Debug.Log("[RagdollIntro] Blend complete.");
-        }
-        else
-        {
-            if (debugLogs) Debug.Log($"[RagdollIntro] Blend SKIPPED. useBlend={useBlend}, blendDuration={blendDuration}");
-        }
-
-        if (timelineDirector != null)
-        {
-            timelineDirector.Resume();
-            if (debugLogs) Debug.Log("[RagdollIntro] Timeline resumed.");
-        }
+        introCoroutine = null;
     }
 
-    IEnumerator ApplyFallForces()
+    IEnumerator ApplyAirBuffet()
     {
+        // Identify extremity bones for lift
         HashSet<Transform> extremities = new HashSet<Transform>();
         if (animator != null && animator.isHuman)
         {
             AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.LeftHand));
             AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.RightHand));
-            AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.LeftLowerArm));
-            AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.RightLowerArm));
             AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.LeftFoot));
             AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.RightFoot));
             AddIfExists(extremities, animator.GetBoneTransform(HumanBodyBones.Head));
         }
 
-        float nextBuffet = 0f;
-
         while (falling)
         {
-            if (airBuffetForce > 0f && Time.time >= nextBuffet)
+            foreach (var rb in ragdollBodies)
             {
-                foreach (var rb in ragdollBodies)
-                {
-                    if (excludedFromForces.Contains(rb.transform)) continue;
+                if (excludedFromForces.Contains(rb.transform)) continue;
 
+                if (airBuffetForce > 0f)
+                {
                     Vector3 randomForce = new Vector3(
                         Random.Range(-airBuffetForce, airBuffetForce),
-                        Random.Range(-airBuffetForce * 0.3f, airBuffetForce * 0.3f),
+                        Random.Range(-airBuffetForce * 0.5f, airBuffetForce * 0.5f),
                         Random.Range(-airBuffetForce, airBuffetForce)
                     );
                     rb.AddForce(randomForce, ForceMode.Impulse);
                 }
-                nextBuffet = Time.time + buffetInterval;
+
+                if (extremityLift > 0f && extremities.Contains(rb.transform))
+                    rb.AddForce(Vector3.up * extremityLift, ForceMode.Impulse);
             }
 
-            if (extremityLift > 0f)
-            {
-                foreach (var rb in ragdollBodies)
-                {
-                    if (excludedFromForces.Contains(rb.transform)) continue;
-                    if (extremities.Contains(rb.transform))
-                        rb.AddForce(Vector3.up * extremityLift, ForceMode.Force);
-                }
-            }
-
-            yield return new WaitForFixedUpdate();
+            yield return new WaitForSeconds(buffetInterval);
         }
     }
 
-    void AddIfExists(HashSet<Transform> set, Transform t)
+    IEnumerator BlendToAnimatedPose()
     {
-        if (t != null) set.Add(t);
+        // Snapshot ragdoll pose
+        Vector3[] ragdollPositions = new Vector3[ragdollBodies.Length];
+        Quaternion[] ragdollRotations = new Quaternion[ragdollBodies.Length];
+
+        for (int i = 0; i < ragdollBodies.Length; i++)
+        {
+            ragdollPositions[i] = boneTransforms[i].localPosition;
+            ragdollRotations[i] = boneTransforms[i].localRotation;
+        }
+
+        DisableRagdoll();
+
+        float t = 0f;
+        while (t < blendDuration)
+        {
+            t += Time.deltaTime;
+            float blend = t / blendDuration;
+
+            for (int i = 0; i < ragdollBodies.Length; i++)
+            {
+                if (boneTransforms[i] == null) continue;
+                boneTransforms[i].localPosition = Vector3.Lerp(ragdollPositions[i], boneBindLocalPositions[i], blend);
+                boneTransforms[i].localRotation = Quaternion.Slerp(ragdollRotations[i], boneBindLocalRotations[i], blend);
+            }
+
+            yield return null;
+        }
     }
 
-    void ApplyFallTuning(bool falling)
+    void EnableRagdoll()
+    {
+        if (animator != null) animator.enabled = false;
+
+        for (int i = 0; i < ragdollBodies.Length; i++)
+        {
+            ragdollBodies[i].isKinematic = false;
+            ragdollBodies[i].linearDamping = fallLinearDrag;
+            ragdollBodies[i].angularDamping = fallAngularDrag;
+        }
+
+        if (characterController != null) characterController.enabled = false;
+    }
+
+    void DisableRagdoll()
     {
         for (int i = 0; i < ragdollBodies.Length; i++)
         {
-            var rb = ragdollBodies[i];
-            if (falling)
-            {
-                rb.linearDamping = fallLinearDrag;
-                rb.angularDamping = fallAngularDrag;
-            }
-            else
-            {
-                rb.linearDamping = originalLinearDrag[i];
-                rb.angularDamping = originalAngularDrag[i];
-            }
+            ragdollBodies[i].isKinematic = true;
+            ragdollBodies[i].linearVelocity = Vector3.zero;
+            ragdollBodies[i].angularVelocity = Vector3.zero;
+            ragdollBodies[i].linearDamping = originalLinearDrag[i];
+            ragdollBodies[i].angularDamping = originalAngularDrag[i];
         }
+
+        if (animator != null) animator.enabled = true;
+        if (characterController != null) characterController.enabled = true;
     }
 
-    IEnumerator WaitForRagdollToSettle()
+    private void AddIfExists(HashSet<Transform> set, Transform t)
     {
-        float settledFor = 0f;
-        float elapsed = 0f;
-        yield return new WaitForFixedUpdate();
-
-        while (elapsed < maxRagdollTime)
-        {
-            float maxVel = 0f;
-            foreach (var rb in ragdollBodies)
-            {
-                float v = rb.linearVelocity.magnitude;
-                if (v > maxVel) maxVel = v;
-            }
-
-            if (maxVel < settleVelocityThreshold) settledFor += Time.fixedDeltaTime;
-            else settledFor = 0f;
-
-            if (settledFor >= settleTime) yield break;
-
-            elapsed += Time.fixedDeltaTime;
-            yield return new WaitForFixedUpdate();
-        }
-    }
-
-    void EnableRagdoll(bool enabled)
-    {
-        if (animator != null) animator.enabled = !enabled;
-        if (characterController != null) characterController.enabled = !enabled;
-
-        foreach (var rb in ragdollBodies)
-        {
-            rb.isKinematic = !enabled;
-            rb.detectCollisions = true;
-            if (enabled) rb.linearVelocity = Vector3.zero;
-        }
-    }
-
-    void CaptureCurrentWorldPose(out Vector3[] worldPositions, out Quaternion[] worldRotations)
-    {
-        worldPositions = new Vector3[boneTransforms.Length];
-        worldRotations = new Quaternion[boneTransforms.Length];
-        for (int i = 0; i < boneTransforms.Length; i++)
-        {
-            worldPositions[i] = boneTransforms[i].position;
-            worldRotations[i] = boneTransforms[i].rotation;
-        }
-    }
-
-    IEnumerator BlendFromRagdollPose(Vector3[] landedWorldPositions, Quaternion[] landedWorldRotations, float duration)
-    {
-        float t = 0f;
-        int frameCount = 0;
-
-        yield return null;
-
-        while (t < duration)
-        {
-            if (timelineDirector != null)
-            {
-                timelineDirector.time = 0;
-                timelineDirector.Evaluate();
-            }
-
-            if (debugLogs && frameCount < 5)
-            {
-                Vector3 leftHandTarget = boneTransforms.Length > 5 ? boneTransforms[5].position : Vector3.zero;
-                Vector3 leftHandLanded = landedWorldPositions.Length > 5 ? landedWorldPositions[5] : Vector3.zero;
-                Debug.Log($"[RagdollIntro] Blend frame {frameCount}: t={t:F3}, dt={Time.deltaTime:F4}, " +
-                          $"hips landed Y={landedWorldPositions[0].y:F3} target Y={boneTransforms[0].position.y:F3}, " +
-                          $"bone[5] landed={leftHandLanded} target={leftHandTarget}");
-            }
-
-            float k = Mathf.Clamp01(t / duration);
-            float s = k * k * (3f - 2f * k);
-
-            for (int i = 0; i < boneTransforms.Length; i++)
-            {
-                Vector3 targetPos = boneTransforms[i].position;
-                Quaternion targetRot = boneTransforms[i].rotation;
-
-                boneTransforms[i].position = Vector3.Lerp(landedWorldPositions[i], targetPos, s);
-                boneTransforms[i].rotation = Quaternion.Slerp(landedWorldRotations[i], targetRot, s);
-            }
-
-            t += Time.deltaTime;
-            frameCount++;
-            yield return null;
-        }
+        if (t != null) set.Add(t);
     }
 }

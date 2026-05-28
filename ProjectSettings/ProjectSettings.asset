@@ -837,6 +837,7 @@ PlayerSettings:
   webEnableSubmoduleStrippingCompatibility: 0
   scriptingDefineSymbols:
     VisionOS: CMS_SALSA
+    iPhone: CMS_SALSA
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
