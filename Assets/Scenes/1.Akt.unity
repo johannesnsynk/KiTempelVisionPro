@@ -21267,11 +21267,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 13cf291af78b24c1c9058b5911284c87, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EuryDissolve
-  explodeForce: 1
+  explodeForce: 0
   rotationSpeed: 5
-  fadeDelay: 100
-  fadeDuration: 2
-  meshScale: 1
+  fadeDelay: 8
+  fadeDuration: 4
 --- !u!4 &2035249901 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -547821800551585324, guid: d131ebf95ae2644d1bc72e5fb75dd967, type: 3}
