@@ -1,7 +1,6 @@
 {
   "dependencies": {
     "com.apple.unityplugin.core": "file:/Users/dennisrudolph/unityplugins/Build/com.apple.unityplugin.core-3.2.0.tgz",
-    "com.apple.unityplugin.phase": "file:/Users/dennisrudolph/unityplugins/Build/com.apple.unityplugin.phase-1.2.7.tgz",
     "com.nsynk.hyperslides-core": "file:../LocalPackages/HyperslidesCore",
     "com.unity.ai.navigation": "2.0.11",
     "com.unity.animation.rigging": "1.4.1",

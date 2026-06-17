@@ -3,6 +3,7 @@
     "rootNamespace": "",
     "references": [
         "Unity.XR.ARFoundation",
+        "Unity.XR.ARKit",
         "UnityMainThreadDispatcher",
         "Unity.XR.ARSubsystems",
         "Unity.InputSystem",

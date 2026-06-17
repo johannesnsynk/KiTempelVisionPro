@@ -12,7 +12,7 @@ public class RagdollIntroSequence : MonoBehaviour
     public Animator animator;
 
     [Header("Drop Settings")]
-    public float dropHeight = 150f;
+    public float dropHeight = 100f;
     public Vector3 initialImpulse = Vector3.zero;
 
     [Header("Fall Tuning")]
@@ -22,33 +22,22 @@ public class RagdollIntroSequence : MonoBehaviour
     public float maxFallSpeed = 12f;
 
     [Header("Fall Liveliness")]
-    [Tooltip("Random angular velocity range applied to each ragdoll body at the start of the fall. Higher = more flailing.")]
     public float initialAngularSpin = 2f;
-
-    [Tooltip("Continuous random force applied to limbs during the fall, simulating air buffeting. 0 to disable.")]
     public float airBuffetForce = 0.5f;
-
-    [Tooltip("Upward 'air resistance' force applied to extremities (hands, feet, head). Creates the classic skydiver silhouette. 0 to disable.")]
     public float extremityLift = 1.5f;
-
-    [Tooltip("How often (in seconds) to apply random buffeting forces. Lower = more chaotic motion.")]
     public float buffetInterval = 0.15f;
 
     [Header("Force Exclusions")]
-    [Tooltip("Skip liveliness forces on the left arm (broken Character Joint causes wild spinning).")]
     public bool excludeLeftArm = true;
-
-    [Tooltip("Skip liveliness forces on the right arm.")]
     public bool excludeRightArm = false;
 
     [Header("Settle Detection")]
-    public float settleVelocityThreshold = 0.05f;
-    public float settleTime = 0.75f;
-    public float maxRagdollTime = 25f;
+    [Tooltip("How long to wait after ragdoll starts before transitioning. Set longer than your expected fall duration.")]
+    public float maxRagdollTime = 10f;
 
     [Header("Pose Blend")]
     public bool useBlend = true;
-    public float blendDuration = 0.4f;
+    public float blendDuration = 0.9f;
 
     [Header("Transition")]
     public float delayBeforeTimeline = 0.1f;
@@ -70,8 +59,13 @@ public class RagdollIntroSequence : MonoBehaviour
     private HashSet<Transform> excludedFromForces = new HashSet<Transform>();
 
     private bool falling = false;
-    private Vector3 originalScenePosition;
-    private Quaternion originalSceneRotation;
+
+    // Stored as LOCAL position/rotation so they stay correct
+    // after XRContentRoot/Anchor moves the parent
+    private Vector3 originalLocalPosition;
+    private Quaternion originalLocalRotation;
+    private Vector3 parentOriginalLocalPosition;
+    private Quaternion parentOriginalLocalRotation;
 
     private Coroutine introCoroutine;
 
@@ -80,9 +74,16 @@ public class RagdollIntroSequence : MonoBehaviour
         if (animator == null) animator = GetComponent<Animator>();
         if (timelineDirector == null) timelineDirector = GetComponent<PlayableDirector>();
 
-        // Store once — never overwrite
-        originalScenePosition = transform.position;
-        originalSceneRotation = transform.rotation;
+        // Store LOCAL position — world position is wrong before anchor is set
+        originalLocalPosition = transform.localPosition;
+        originalLocalRotation = transform.localRotation;
+
+        // Store parent (AvatarMover) local position/rotation
+        if (transform.parent != null)
+        {
+            parentOriginalLocalPosition = transform.parent.localPosition;
+            parentOriginalLocalRotation = transform.parent.localRotation;
+        }
 
         ragdollBodies = GetComponentsInChildren<Rigidbody>();
         characterController = GetComponent<CharacterController>();
@@ -131,14 +132,10 @@ public class RagdollIntroSequence : MonoBehaviour
         }
     }
 
-    void Start()
-    {
-        // Start() only runs once — actual sequencing handled by OnEnable
-    }
+    void Start() { }
 
     void OnEnable()
     {
-        // OnEnable: only subscribe, no Rebind here to avoid pop
         var slideElement = GetComponentInParent<XRSlideElement>();
         if (slideElement != null)
         {
@@ -164,19 +161,18 @@ public class RagdollIntroSequence : MonoBehaviour
         if (slideElement != null)
             slideElement.OnVisibilityStateChanged -= OnSlideVisibilityChanged;
 
-        // Full reset on disable — Rebind here clears root motion for next cycle
         HardReset();
     }
 
-    /// <summary>
-    /// Full reset including Rebind — call only on disable, not on enable,
-    /// to avoid the animator snap/pop being visible.
-    /// </summary>
     void HardReset()
     {
         falling = false;
 
-        if (timelineDirector != null) timelineDirector.Stop();
+        if (timelineDirector != null)
+        {
+            timelineDirector.Stop();
+            timelineDirector.time = 0;
+        }
         if (characterController != null) characterController.enabled = true;
 
         if (ragdollBodies == null) return;
@@ -185,6 +181,7 @@ public class RagdollIntroSequence : MonoBehaviour
         {
             if (ragdollBodies[i] == null) continue;
             ragdollBodies[i].isKinematic = true;
+            ragdollBodies[i].useGravity = true;
             ragdollBodies[i].linearVelocity = Vector3.zero;
             ragdollBodies[i].angularVelocity = Vector3.zero;
             ragdollBodies[i].linearDamping = originalLinearDrag[i];
@@ -201,9 +198,16 @@ public class RagdollIntroSequence : MonoBehaviour
             }
         }
 
-        // Reset root
-        transform.position = originalScenePosition;
-        transform.rotation = originalSceneRotation;
+        // Use LOCAL position so anchor offset is respected
+        transform.localPosition = originalLocalPosition;
+        transform.localRotation = originalLocalRotation;
+
+        // Restore AvatarMover (parent) to original position/rotation
+        if (transform.parent != null)
+        {
+            transform.parent.localPosition = parentOriginalLocalPosition;
+            transform.parent.localRotation = parentOriginalLocalRotation;
+        }
 
         if (hipsBone != null)
         {
@@ -211,7 +215,6 @@ public class RagdollIntroSequence : MonoBehaviour
             hipsBone.localRotation = Quaternion.identity;
         }
 
-        // Rebind clears accumulated root motion — safe here because object is inactive
         if (animator != null)
         {
             animator.applyRootMotion = false;
@@ -223,7 +226,7 @@ public class RagdollIntroSequence : MonoBehaviour
 
     void OnSlideVisibilityChanged(XRSlideElement.VisibilityState state)
     {
-        if (debugLogs) Debug.Log($"[RagdollIntro] SlideElement Visibility: {state}");
+        if (debugLogs) Debug.Log($"[RagdollIntro] Visibility: {state} at {Time.time:F2}s");
 
         if (state == XRSlideElement.VisibilityState.FullyVisible)
         {
@@ -249,16 +252,23 @@ public class RagdollIntroSequence : MonoBehaviour
 
     IEnumerator RunIntroSequence()
     {
-        // Drop from above originalScenePosition
+        // Read world position NOW — anchor is set at this point
+        Vector3 worldStart = transform.position;
+
         transform.position = new Vector3(
-            originalScenePosition.x,
-            originalScenePosition.y + dropHeight,
-            originalScenePosition.z
+            worldStart.x,
+            worldStart.y + dropHeight,
+            worldStart.z
         );
 
-        if (debugLogs) Debug.Log($"[RagdollIntro] Dropping from height {dropHeight}");
+        if (debugLogs) Debug.Log($"[RagdollIntro] Drop start at {Time.time:F2}s, from world {worldStart}, height={dropHeight}");
 
         EnableRagdoll();
+
+        // Wait 10 frames for PolySpatial to register physics state
+        for (int i = 0; i < 10; i++)
+            yield return null;
+
         falling = true;
 
         if (initialImpulse != Vector3.zero)
@@ -284,55 +294,46 @@ public class RagdollIntroSequence : MonoBehaviour
         if (airBuffetForce > 0f || extremityLift > 0f)
             buffetCoroutine = StartCoroutine(ApplyAirBuffet());
 
-        // Wait for settle
-        float ragdollTimer = 0f;
-        float settleTimer = 0f;
-
-        while (ragdollTimer < maxRagdollTime)
-        {
-            ragdollTimer += Time.deltaTime;
-
-            float maxVel = 0f;
-            foreach (var rb in ragdollBodies)
-                maxVel = Mathf.Max(maxVel, rb.linearVelocity.magnitude);
-
-            if (maxVel < settleVelocityThreshold)
-            {
-                settleTimer += Time.deltaTime;
-                if (settleTimer >= settleTime) break;
-            }
-            else
-            {
-                settleTimer = 0f;
-            }
-
-            yield return null;
-        }
+        // Simple time-based wait — most reliable on visionOS/PolySpatial
+        if (debugLogs) Debug.Log($"[RagdollIntro] Waiting {maxRagdollTime}s...");
+        yield return new WaitForSeconds(maxRagdollTime);
 
         falling = false;
 
         if (buffetCoroutine != null)
             StopCoroutine(buffetCoroutine);
 
-        if (debugLogs) Debug.Log("[RagdollIntro] Ragdoll settled.");
+        if (debugLogs) Debug.Log($"[RagdollIntro] Ragdoll done at {Time.time:F2}s — starting blend");
 
         yield return new WaitForSeconds(delayBeforeTimeline);
 
-        // Smooth blend from ragdoll pose back to bind pose
         if (useBlend && blendDuration > 0f)
             yield return StartCoroutine(BlendToAnimatedPose());
         else
             DisableRagdoll();
 
-        // Snap root position — animator is already enabled by BlendToAnimatedPose/DisableRagdoll
-        // applyRootMotion was false; let the timeline control movement
-        transform.position = originalScenePosition;
-        transform.rotation = originalSceneRotation;
+        if (debugLogs) Debug.Log($"[RagdollIntro] Blend END at {Time.time:F2}s");
+
+        // Reset AvatarV2 (this object)
+        transform.localPosition = originalLocalPosition;
+        transform.localRotation = originalLocalRotation;
+
+        // Reset AvatarMover (parent) to its original position/rotation
+        // NOT to zero — AvatarMover has z=-2, y=180 etc.
+        if (transform.parent != null)
+        {
+            transform.parent.localPosition = parentOriginalLocalPosition;
+            transform.parent.localRotation = parentOriginalLocalRotation;
+        }
+
+        if (debugLogs) Debug.Log($"[RagdollIntro] Timeline START at {Time.time:F2}s, world pos={transform.position}");
 
         if (timelineDirector != null)
         {
-            if (debugLogs) Debug.Log("[RagdollIntro] Playing timeline.");
+            timelineDirector.time = 0;
+            timelineDirector.Evaluate();
             timelineDirector.Play();
+            if (debugLogs) Debug.Log($"[RagdollIntro] Timeline state after Play(): {timelineDirector.state}");
         }
 
         introCoroutine = null;
@@ -376,7 +377,6 @@ public class RagdollIntroSequence : MonoBehaviour
 
     IEnumerator BlendToAnimatedPose()
     {
-        // Snapshot ragdoll bone poses
         Vector3[] ragdollPositions = new Vector3[ragdollBodies.Length];
         Quaternion[] ragdollRotations = new Quaternion[ragdollBodies.Length];
 
@@ -386,8 +386,7 @@ public class RagdollIntroSequence : MonoBehaviour
             ragdollRotations[i] = boneTransforms[i].localRotation;
         }
 
-        // Make kinematic, keep animator OFF — we drive bones manually
-        // This prevents the one-frame pop from animator snapping to its first pose
+        // Kinematic on, animator stays OFF — manual bone drive prevents pop
         for (int i = 0; i < ragdollBodies.Length; i++)
         {
             ragdollBodies[i].isKinematic = true;
@@ -398,12 +397,17 @@ public class RagdollIntroSequence : MonoBehaviour
         }
         if (characterController != null) characterController.enabled = false;
 
+        // Snapshot root position at blend start
+        Vector3 ragdollRootLocalPos = transform.localPosition;
+        Quaternion ragdollRootLocalRot = transform.localRotation;
+
         float t = 0f;
         while (t < blendDuration)
         {
             t += Time.deltaTime;
             float blend = Mathf.Clamp01(t / blendDuration);
 
+            // Lerp bones back to bind pose
             for (int i = 0; i < ragdollBodies.Length; i++)
             {
                 if (boneTransforms[i] == null) continue;
@@ -411,10 +415,18 @@ public class RagdollIntroSequence : MonoBehaviour
                 boneTransforms[i].localRotation = Quaternion.Slerp(ragdollRotations[i], boneBindLocalRotations[i], blend);
             }
 
+            // Also lerp root transform back to original local position
+            // so avatar doesn't snap/float when animator takes over
+            transform.localPosition = Vector3.Lerp(ragdollRootLocalPos, originalLocalPosition, blend);
+            transform.localRotation = Quaternion.Slerp(ragdollRootLocalRot, originalLocalRotation, blend);
+
             yield return null;
         }
 
-        // Blend done — enable animator smoothly, no Rebind here
+        // Ensure exact final position
+        transform.localPosition = originalLocalPosition;
+        transform.localRotation = originalLocalRotation;
+
         if (animator != null) animator.enabled = true;
         if (characterController != null) characterController.enabled = true;
     }
@@ -426,6 +438,7 @@ public class RagdollIntroSequence : MonoBehaviour
         for (int i = 0; i < ragdollBodies.Length; i++)
         {
             ragdollBodies[i].isKinematic = false;
+            ragdollBodies[i].useGravity = true;
             ragdollBodies[i].linearDamping = fallLinearDrag;
             ragdollBodies[i].angularDamping = fallAngularDrag;
         }
