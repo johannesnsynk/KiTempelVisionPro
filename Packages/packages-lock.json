@@ -1,11 +1,5 @@
 {
   "dependencies": {
-    "com.apple.unityplugin.core": {
-      "version": "file:/Users/dennisrudolph/unityplugins/Build/com.apple.unityplugin.core-3.2.0.tgz",
-      "depth": 0,
-      "source": "local-tarball",
-      "dependencies": {}
-    },
     "com.nsynk.hyperslides-core": {
       "version": "file:../LocalPackages/HyperslidesCore",
       "depth": 0,

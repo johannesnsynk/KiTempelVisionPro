@@ -1,0 +1,22 @@
+﻿<Solution>
+  <Project Path="NSYNK.Hyperslides.Runtime.csproj" />
+  <Project Path="TiltBrushToolkitEditor.csproj" />
+  <Project Path="Assembly-CSharp.csproj" />
+  <Project Path="TiltBrushToolkitThirdPartyEditor.csproj" />
+  <Project Path="NakamaEditor.csproj" />
+  <Project Path="NSYNK.Hyperslides.Editor.csproj" />
+  <Project Path="Assembly-CSharp-firstpass.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.csproj" />
+  <Project Path="TiltBrushToolkitRuntime.csproj" />
+  <Project Path="TiltBrushToolkitThirdParty.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.Hands.csproj" />
+  <Project Path="NakamaRuntime.csproj" />
+  <Project Path="UnityMainThreadDispatcher.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.ARStarterAssets.csproj" />
+  <Project Path="Unity.XR.Hands.Samples.VisualizerSample.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.Hands.Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+  <Project Path="Assembly-CSharp-Editor-firstpass.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.Editor.csproj" />
+  <Project Path="Unity.XR.Interaction.Toolkit.Samples.ARStarterAssets.Editor.csproj" />
+</Solution>
