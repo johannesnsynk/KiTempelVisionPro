@@ -1,0 +1,64 @@
+#!/bin/sh
+set -euo pipefail
+
+APP_FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
+UNITY_FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/UnityFramework.framework/Frameworks"
+
+mkdir -p "$APP_FRAMEWORKS_DIR"
+mkdir -p "$UNITY_FRAMEWORKS_DIR"
+
+find_framework() {
+  local framework_name="$1"
+  local candidates="
+${BUILT_PRODUCTS_DIR}/PackageFrameworks/${framework_name}
+${BUILT_PRODUCTS_DIR}/${framework_name}
+${TARGET_BUILD_DIR}/${framework_name}
+"
+  local p
+  for p in $candidates; do
+    if [ -d "$p" ]; then
+      echo "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+embed_framework() {
+  local src="$1"
+  local name
+  name="$(basename "$src")"
+
+  for dst in "$APP_FRAMEWORKS_DIR" "$UNITY_FRAMEWORKS_DIR"; do
+    rm -rf "${dst:?}/${name}"
+    cp -R "$src" "$dst/"
+    if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+      /usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --preserve-metadata=identifier,entitlements "${dst}/${name}"
+    fi
+  done
+}
+
+LIVEKIT_SRC="$(find_framework "LiveKit.framework" || true)"
+if [ -z "$LIVEKIT_SRC" ]; then
+  echo "error: LiveKit.framework not found"
+  exit 1
+fi
+
+RUST_UNIFFI_SRC="$(find_framework "RustLiveKitUniFFI.framework" || true)"
+if [ -z "$RUST_UNIFFI_SRC" ]; then
+  echo "error: RustLiveKitUniFFI.framework not found"
+  exit 1
+fi
+
+WEBRTC_SRC="$(find_framework "LiveKitWebRTC.framework" || true)"
+if [ -z "$WEBRTC_SRC" ]; then
+  WEBRTC_SRC="$(find_framework "WebRTC.framework" || true)"
+fi
+if [ -z "$WEBRTC_SRC" ]; then
+  echo "error: neither LiveKitWebRTC.framework nor WebRTC.framework found"
+  exit 1
+fi
+
+embed_framework "$LIVEKIT_SRC"
+embed_framework "$RUST_UNIFFI_SRC"
+embed_framework "$WEBRTC_SRC"

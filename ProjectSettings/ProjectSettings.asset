@@ -146,6 +146,9 @@ PlayerSettings:
   bundleVersion: 0.1.0
   preloadedAssets:
   - {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
+  - {fileID: 11400000, guid: 3822d0d206a91472bb3de00de3f90dcd, type: 2}
+  - {fileID: 11400000, guid: 6eb29f60cce774b6ba7288189dd7f36f, type: 2}
+  - {fileID: 7413466935655277418, guid: 240c9296941834d49b551ee671b846fc, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   xboxOneDisableKinectGpuReservation: 1
@@ -843,7 +846,7 @@ PlayerSettings:
   webEnableSubmoduleStrippingCompatibility: 0
   scriptingDefineSymbols:
     Standalone: CMS_SALSA
-    VisionOS: CMS_SALSA
+    VisionOS: CMS_SALSA;NO_LIVEKIT_MODE
     iPhone: CMS_SALSA;UNITY_XR_ARKIT_LOADER_ENABLED
   additionalCompilerArguments: {}
   platformArchitecture: {}
@@ -951,7 +954,7 @@ PlayerSettings:
   cloudEnabled: 0
   legacyClampBlendShapeWeights: 0
   hmiLoadingImage: {fileID: 0}
-  platformRequiresReadableAssets: 0
+  platformRequiresReadableAssets: 1
   virtualTexturingSupportEnabled: 0
   insecureHttpOption: 0
   androidVulkanDenyFilterList: []
