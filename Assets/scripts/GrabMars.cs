@@ -8,8 +8,10 @@ public class PickupObject : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        if (grabTriggerSource == null || grabPoint == null) return;
+        
         if (grabbed) return;
-        if (other.transform == grabTriggerSource || 
+        if (other.transform == grabTriggerSource ||
             other.transform.IsChildOf(grabTriggerSource))
         {
             grabbed = true;

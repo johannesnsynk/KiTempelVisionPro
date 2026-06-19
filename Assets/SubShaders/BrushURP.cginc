@@ -98,10 +98,18 @@ void musicReactiveAnimationWorldSpace_float(float4 worldPos, float4 color, float
 
 void musicReactiveAnimation_float(float4 vertex, float4 color, float beat, float t, out float4 OUT)
 {
+#if defined(UNITY_MATRIX_M)
+    float4 worldPos = mul(UNITY_MATRIX_M, vertex);
+#else
     float4 worldPos = mul(unity_ObjectToWorld, vertex);
+#endif
     float4 musicReactiveAnimationWorldSpace;
     musicReactiveAnimationWorldSpace_float(worldPos, color, beat, t, musicReactiveAnimationWorldSpace);
+#if defined(UNITY_MATRIX_I_M)
+    OUT = mul(UNITY_MATRIX_I_M, musicReactiveAnimationWorldSpace);
+#else
     OUT = mul(unity_WorldToObject, musicReactiveAnimationWorldSpace);
+#endif
 }
 
 void ParticleVertexToWorld_float(float4 vertex, out float4 OUT)
