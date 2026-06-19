@@ -2,13 +2,18 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using CrazyMinnow.SALSA;
 using LiveKit;
 using LiveKit.Proto;
+using NSYNK.LiveKitIntegration;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 public class LiveKitManager : MonoBehaviour
 {
+    [SerializeField]
+    private Salsa salsaLipSync;
+
     [Header("Connection Overrides")]
     [SerializeField]
     private string _roomName = "local-ai-room";
@@ -73,24 +78,21 @@ public class LiveKitManager : MonoBehaviour
     // The chat sequence is a simple counter to ensure a consistent ordering of chat messages in the log when multiple messages have the same timestamp.
     private long _chatSequence;
     private Coroutine _connectRoutine;
-    private bool _started;
-    private bool _isShuttingDown;
 
-    private void OnTriggerEnter(Collider other)
+    private void OnEnable()
     {
-        OnPushToTalkPerformed(new InputAction.CallbackContext());
+        salsaLipSync = FindAnyObjectByType<Salsa>(FindObjectsInactive.Include);
+
+        // SetupPushToTalk();
+        StopAllCoroutines();
+        StartCoroutine(InitLiveKit());
     }
 
-    private void OnTriggerExit(Collider other)
+    private IEnumerator InitLiveKit()
     {
-        OnPushToTalkCanceled(new InputAction.CallbackContext());
-    }
+        Debug.Log("LiveKitManager starting up and connecting to room '" + _roomName + "' as participant '" + _participantName + "' with identity '" + _participantIdentity + "'.");
 
-    private IEnumerator Start()
-    {
         _tokenSourceComponent = GetComponent<TokenSourceComponent>();
-        SetupPushToTalk();
-        _started = true;
         _connectRoutine = StartCoroutine(ConnectRealtime("startup"));
         yield return _connectRoutine;
     }
@@ -98,16 +100,6 @@ public class LiveKitManager : MonoBehaviour
     private void Update()
     {
         _realtimeClient?.PumpEvents();
-    }
-
-    private void OnApplicationPause(bool pauseStatus)
-    {
-        // Intentionally no reconnect/disconnect on pause.
-    }
-
-    private void OnApplicationFocus(bool hasFocus)
-    {
-        // Intentionally no reconnect/disconnect on focus changes.
     }
 
     private IEnumerator ConnectRealtime(string reason)
@@ -127,6 +119,10 @@ public class LiveKitManager : MonoBehaviour
             Debug.LogError("No realtime client available.");
             _connectRoutine = null;
             yield break;
+        }
+        else
+        {
+            Debug.Log("Realtime client created using " + _realtimeClient.GetType().Name + " (" + reason + ").");
         }
 
         string connectIdentity = ResolveConnectParticipantIdentity();
@@ -150,6 +146,10 @@ public class LiveKitManager : MonoBehaviour
             _connectRoutine = null;
             yield break;
         }
+        else
+        {
+            Debug.Log("Connected to room '" + _room.Name + "' with SID '" + _room.Sid + "' (" + reason + ").");
+        }
 
         _room.TrackSubscribed += TrackSubscribed;
         _room.ParticipantConnected += OnParticipantConnected;
@@ -165,6 +165,8 @@ public class LiveKitManager : MonoBehaviour
 
     private void TearDownRealtimeClient()
     {
+        Debug.Log("Tearing down realtime client and cleaning up resources.");
+
         CleanupLocalMicrophone();
 
         if (_realtimeClient != null)
@@ -446,8 +448,6 @@ public class LiveKitManager : MonoBehaviour
     /// </summary>
     private void OnDestroy()
     {
-        _isShuttingDown = true;
-
         if (_connectRoutine != null)
         {
             StopCoroutine(_connectRoutine);
@@ -828,6 +828,26 @@ public class LiveKitManager : MonoBehaviour
             AudioStream stream = new AudioStream(audioTrack, source);
             _audioObjects[audioTrack.Sid] = audObject;
             _audioStreams[audioTrack.Sid] = stream;
+
+            if (audioTrack.Name == "bridge-audio")
+            {
+                Debug.Log("Assigning audio source for agent participant " + participant.Identity);
+
+                if (salsaLipSync == null)
+                {
+                    Debug.LogWarning("SALSA reference is missing; cannot assign bridge-audio analysis source.");
+                    return;
+                }
+
+                SalsaExternalAnalysisBridge analysisBridge = audObject.GetComponent<SalsaExternalAnalysisBridge>();
+                if (analysisBridge == null)
+                    analysisBridge = audObject.AddComponent<SalsaExternalAnalysisBridge>();
+
+                // LiveKit delivers PCM through the audio filter path; drive SALSA from the same signal.
+                salsaLipSync.audioSrc = source;
+                salsaLipSync.useExternalAnalysis = true;
+                salsaLipSync.getExternalAnalysis = analysisBridge.GetAnalysisValue;
+            }
         }
     }
 

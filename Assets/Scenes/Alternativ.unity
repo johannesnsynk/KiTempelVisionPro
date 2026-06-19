@@ -6631,6 +6631,7 @@ Transform:
   m_Children:
   - {fileID: 244007331}
   - {fileID: 1798317431}
+  - {fileID: 691945810}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &650425396
@@ -7330,6 +7331,68 @@ Transform:
   m_CorrespondingSourceObject: {fileID: -8856139485139412629, guid: 2aa9688a919654963b778b9f8c745e63, type: 3}
   m_PrefabInstance: {fileID: 4445475824797031094}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &691945809
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 691945810}
+  - component: {fileID: 691945811}
+  m_Layer: 0
+  m_Name: XRSllideElement LiveKit
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &691945810
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 691945809}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 738237212}
+  m_Father: {fileID: 635222755}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &691945811
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 691945809}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a16bacbb4668b4fabb243a22c6108bd4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: NSYNK.Hyperslides.Runtime::NSYNK.HyperSlides.Runtime.XRSlideElement
+  contentTag: Temple
+  DissolveInDuration: 1
+  DissolveOutDuration: 1
+  dissolveNormalized: 0
+  dissolveInOut: 0
+  visibilityStateEvents: []
+  triggerEvents: []
+  assetIsValid: 1
+  assetReference:
+    m_AssetGUID: 6479cfeb64bd5462f8faa40ac4140842
+    m_SubObjectName: 
+    m_SubObjectType: 
+    m_SubObjectGUID: 
+    m_EditorAssetChanged: 0
+  AssetActive: 0
+  IsLoading: 0
+  rootContent: {fileID: 0}
 --- !u!1001 &698282563
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8067,6 +8130,37 @@ CapsuleCollider:
   m_Height: 52.544662
   m_Direction: 1
   m_Center: {x: 0, y: 26.272331, z: 0}
+--- !u!1 &738237211
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 738237212}
+  m_Layer: 0
+  m_Name: ElementRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &738237212
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 738237211}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 691945810}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &743073457
 PrefabInstance:
   m_ObjectHideFlags: 0
