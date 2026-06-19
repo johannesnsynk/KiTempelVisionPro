@@ -15,12 +15,15 @@ namespace NSYNK.HyperSlides.UI
 
         void OnEnable()
         {
-            RuntimeHandler.tick += UpdateTime;
+            RuntimeHandler.Instance.Tick += UpdateTime;
         }
 
         void OnDisable()
         {
-            RuntimeHandler.tick -= UpdateTime;
+            if (RuntimeHandler.Instance == null)
+                return;
+
+            RuntimeHandler.Instance.Tick -= UpdateTime;
         }
 
         private void UpdateTime()

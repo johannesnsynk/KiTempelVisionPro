@@ -9,7 +9,7 @@ namespace NSYNK.HyperSlides.UI
     [RequireComponent(typeof(RawImage))]
     public class UIMarkerImage : MonoBehaviour
     {
-        public XRWorldAnchor.AnchorType type;
+        public XRWorldAnchor.WorldAnchorType type;
 
         private RawImage markerUIImage;
 
@@ -20,7 +20,7 @@ namespace NSYNK.HyperSlides.UI
 
         private void OnEnable()
         {
-            markerUIImage.texture = type == XRWorldAnchor.AnchorType.Position ?
+            markerUIImage.texture = type == XRWorldAnchor.WorldAnchorType.Position ?
                 XRAnchorManager.Instance.arTrackedImageManager.referenceLibrary[0].texture :
                 XRAnchorManager.Instance.arTrackedImageManager.referenceLibrary[1].texture;
         }

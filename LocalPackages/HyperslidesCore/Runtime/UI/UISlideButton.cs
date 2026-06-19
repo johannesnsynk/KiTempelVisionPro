@@ -23,9 +23,9 @@ namespace NSYNK.HyperSlides.UI
 
             Dispatcher.Enqueue(() =>
             {
-                if (XRSlideManager.GetCurrentSlide() && interactable)
+                if (XRSlideManager.Instance.GetCurrentSlide() && interactable)
                 {
-                    interactable = slide.id != XRSlideManager.GetCurrentSlide().id;
+                    interactable = slide.id != XRSlideManager.Instance.GetCurrentSlide().id;
 
                     if (activeSlideIndicator)
                         activeSlideIndicator.SetActive(!interactable);
@@ -35,11 +35,8 @@ namespace NSYNK.HyperSlides.UI
 
         public void LoadThumbnail()
         {
-            Dispatcher.Enqueue(() =>
-            {
-                if (slide && !string.IsNullOrEmpty(slide.preview))
-                    StartCoroutine(GetSlideThumbnail(slide.preview));
-            });
+            if (slide && !string.IsNullOrEmpty(slide.preview))
+                StartCoroutine(GetSlideThumbnail(slide.preview));
         }
 
         IEnumerator GetSlideThumbnail(string coverURL)

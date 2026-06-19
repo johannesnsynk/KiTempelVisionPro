@@ -37,3 +37,13 @@ MonoBehaviour:
     m_SpecifySize: 1
     m_Name: RotationMarker
     m_Texture: {fileID: 2800000, guid: 720637890c07a41718f2f6a89ebade2e, type: 3}
+  - m_SerializedGuid:
+      m_GuidLow: 5727028865908903973
+      m_GuidHigh: 12456553134338235573
+    m_SerializedTextureGuid:
+      m_GuidLow: 4947742541600335679
+      m_GuidHigh: 160532398268079387
+    m_Size: {x: 0.5, y: 0.5}
+    m_SpecifySize: 1
+    m_Name: PositionMarker
+    m_Texture: {fileID: 2800000, guid: 982d273fe9a044a91bddb59d5d533a02, type: 3}

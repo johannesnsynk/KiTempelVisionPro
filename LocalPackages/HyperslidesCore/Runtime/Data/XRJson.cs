@@ -9,13 +9,13 @@ namespace NSYNK.HyperSlides
     /// </summary>
     [Serializable]
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
-    public class XRJson
+    public class XRJson<T>
     {
         //public string[] _reqBody;
         //public Dictionary<string, int> _reqParams;
         public string timestamp;
         public string controller;
-        public XRPresentation data;
+        public T data;
     }
 
     /// <summary>
@@ -23,8 +23,8 @@ namespace NSYNK.HyperSlides
     /// </summary>
     [Serializable]
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
-    public class XRJsonArray : XRJson
+    public class XRJsonArray<T> : XRJson<T>
     {
-        public new List<XRPresentation> data;
+        public new List<T> data;
     }
 }

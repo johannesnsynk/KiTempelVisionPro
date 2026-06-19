@@ -43,7 +43,7 @@ namespace NSYNK.HyperSlides.Network
         public override void OnEnable()
         {
             base.OnEnable();
-            XRInputManager.onTouchUpdate += HandeChangeTouchPhase;
+            XRInputManager.Instance.OnTouchUpdate += HandleChangeTouchPhase;
 
             CheckForCollider();
         }
@@ -51,7 +51,9 @@ namespace NSYNK.HyperSlides.Network
         public override void OnDisable()
         {
             base.OnDisable();
-            XRInputManager.onTouchUpdate -= HandeChangeTouchPhase;
+
+            if (XRInputManager.Instance)
+                XRInputManager.Instance.OnTouchUpdate -= HandleChangeTouchPhase;
         }
 
         private void CheckForCollider()
@@ -72,9 +74,9 @@ namespace NSYNK.HyperSlides.Network
         /// Handles the change in touch phase for the primary touch input.
         /// </summary>
         /// <param name="touchPhase"></param>
-        private void HandeChangeTouchPhase(TouchPhase touchPhase)
+        private void HandleChangeTouchPhase(TouchPhase touchPhase)
         {
-            if (XRInputManager.Instance.m_SelectedObject == grabbedObject.gameObject)
+            if (XRInputManager.Instance.selectedObject == grabbedObject.gameObject)
             {
                 isGrabbed =
                     touchPhase != TouchPhase.None &&
@@ -95,8 +97,14 @@ namespace NSYNK.HyperSlides.Network
                     case TouchPhase.Stationary:
                         Move();
                         break;
+                    case TouchPhase.Ended:
+                        ReleaseTransform();
+                        break;
                 }
             }
+
+            if (isGrabbed && (touchPhase == TouchPhase.Ended || touchPhase == TouchPhase.Canceled))
+                ReleaseTransform();
         }
 
         /// <summary>
@@ -104,10 +112,16 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         private void PrepareRelativeOffsets()
         {
-            interactionPosition = XRInputManager.Instance.primaryTouchData.interactionPosition;
+            interactionPosition = XRInputManager.Instance.InteractionPosition;
 
+#if UNITY_VISIONOS
             Quaternion inverseDeviceRotation = Quaternion.Inverse(XRInputManager.Instance.primaryTouchData.inputDeviceRotation);
             positionOffset = inverseDeviceRotation * (transform.position - interactionPosition);
+#else
+            // On iOS, calculate offset relative to camera orientation
+            Quaternion inverseDeviceRotation = Quaternion.Inverse(Camera.main.transform.rotation);
+            positionOffset = inverseDeviceRotation * (transform.position - interactionPosition);
+#endif
         }
 
         /// <summary>
@@ -117,7 +131,7 @@ namespace NSYNK.HyperSlides.Network
         {
             if (!isGrabbed || grabbedObject == null) return;
 
-            Vector3 desiredGrabbedWorldPos = XRInputManager.Instance.primaryTouchData.interactionPosition;
+            Vector3 desiredGrabbedWorldPos = XRInputManager.Instance.InteractionPosition;
 
             Quaternion rotation = transform.rotation;
             if (lookAtUserPosition)

@@ -50,7 +50,7 @@ Preset:
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: 'layers.Array.data[7]'
-    value: 
+    value: Interaction
     objectReference: {fileID: 0}
   - target: {fileID: 0}
     propertyPath: 'layers.Array.data[8]'

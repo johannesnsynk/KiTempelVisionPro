@@ -1,28 +1,20 @@
 using System;
 using NSYNK.HyperSlides.Core;
 using NSYNK.HyperSlides.Network;
+using NSYNK.HyperSlides.Runtime;
 using TMPro;
 using UnityEngine;
 
 namespace NSYNK.HyperSlides.UI
 {
-    public class UISlideOverview : MonoBehaviour
+    public class UISlideOverview : UITogglePanel
     {
         public UISlideButton uiButtonPrefab;
         public Transform scrollViewContent;
 
-        private RectTransform rectTransform;
-        private bool isOpen = false;
-
-        void Awake()
-        {
-            rectTransform = GetComponent<RectTransform>();
-            rectTransform.anchoredPosition = new Vector2(rectTransform.sizeDelta.x, rectTransform.anchoredPosition.y);
-        }
-
         private void OnEnable()
         {
-            XRNetworkManager.onMatchJoined += UpdateSlideOverview;
+            XRNetworkManager.Instance.OnMatchJoined += UpdateSlideOverview;
 
             if (XRNetworkManager.Instance)
                 UpdateSlideOverview();
@@ -30,50 +22,43 @@ namespace NSYNK.HyperSlides.UI
 
         private void OnDisable()
         {
-            XRNetworkManager.onMatchJoined -= UpdateSlideOverview;
+            if (XRNetworkManager.Instance == null)
+                return;
+
+            XRNetworkManager.Instance.OnMatchJoined -= UpdateSlideOverview;
         }
 
-        public void OpenClose()
-        {
-            isOpen = !isOpen;
-
-            Vector2 anchoredPos = rectTransform.anchoredPosition;
-
-            this.AnimateFloat(this.transform, Easing.Ease.EaseInOutQuad, 0, 1, 0.5f, 0, update =>
-            {
-                anchoredPos.x = Mathf.Lerp(anchoredPos.x, isOpen ? 50 : rectTransform.sizeDelta.x, update);
-                rectTransform.anchoredPosition = anchoredPos;
-            });
-        }
-
+        /// <summary>
+        /// Updates the slide overview list with current slides in the presentation
+        /// </summary>
         private void UpdateSlideOverview()
         {
             foreach (Transform t in scrollViewContent.transform)
                 Destroy(t.gameObject);
 
-            if (!XRSlideManager.CurrentPresentation)
+            if (!XRSlideManager.Instance.CurrentPresentation)
                 return;
 
-            for (int i = 0; i < XRSlideManager.CurrentPresentation.contents.Count; i++)
+            for (int i = 0; i < XRSlideManager.Instance.CurrentPresentation.contents.Count; i++)
             {
                 int currentIndex = i + 1;
 
-                if(XRSlideManager.CurrentPresentation.contents[i] is XRSlide.Trigger)
+                if (XRSlideManager.Instance.CurrentPresentation.contents[i] is XRSlide.Trigger)
                     continue;
 
-                XRSlide slide = XRSlideManager.CurrentPresentation.contents[i] as XRSlide;
+                XRSlide slide = XRSlideManager.Instance.CurrentPresentation.contents[i] as XRSlide;
                 UISlideButton newSlideButton = Instantiate(uiButtonPrefab, scrollViewContent, false);
-                TextMeshProUGUI buttonLabel = newSlideButton.GetComponentInChildren<TMPro.TextMeshProUGUI>();
+                TextMeshProUGUI buttonLabel = newSlideButton.GetComponentInChildren<TextMeshProUGUI>();
 
                 newSlideButton.slide = slide;
                 newSlideButton.LoadThumbnail();
 
                 if (buttonLabel)
-                    buttonLabel.text = slide.cueNumber + " - " + slide.displayName;
+                    buttonLabel.text = (DeviceInfo.Instance.UseStandaloneSetup ? i + 1 : slide.cueNumber) + " - " + slide.displayName;
 
                 newSlideButton.onClick.AddListener(() =>
                 {
-                    XRNetworkManager.Instance.SendSlideUpdate(XRSlideManager.CurrentPresentation, currentIndex);
+                    XRNetworkManager.Instance.SendSlideUpdate(XRSlideManager.Instance.CurrentPresentation, currentIndex);
                 });
             }
         }

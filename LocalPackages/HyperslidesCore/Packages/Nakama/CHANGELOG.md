@@ -3,17 +3,50 @@ All notable changes to this project are documented below.
 
 The format is based on [keep a changelog](http://keepachangelog.com/) and this project uses [semantic versioning](http://semver.org/).
 
-### [Unreleased]
+## [3.19.0] - 2025-10-02
+### Changed
+- Update to use Nakama and Satori .NET 3.20.0 release.
+- Update code snippets to use new Close reason with Socket.
 
-### [3.13.0] - 2024-07-10
+### Fixed
+- Fix code snippet for Satori example.
+
+## [3.18.0] - 2025-09-10
+### Changed
+- Update to use Nakama and Satori .NET 3.18.0 release.
+
+## [3.17.0] - 2025-07-17
+### Added
+- Add request logging to the "UnityWebRequestAdapter" type. Thanks @epishev-m
+
+### Changed
+- Update to use Nakama and Satori .NET 3.17.0 release.
+- Set the minimum supported version of Unity engine to be on 2022.3 LTS release.
+
+## [3.16.0] - 2025-02-13
+### Changed
+- Update to use Nakama and Satori .NET 3.16.0 release.
+
+## [3.15.0] - 2025-01-29
+### Changed
+- Update to use Nakama and Satori .NET 3.15.0 release.
+
+### Fixed
+- Fix compatibility with WebGL builds in Unity 6.
+
+## [3.14.0] - 2024-11-05
+### Changed
+- Update to use Nakama and Satori .NET 3.14.0 release.
+
+## [3.13.0] - 2024-07-10
 ### Changed
 - Updated to use the Nakama and Satori .NET 3.13.0 release.
 
-### [3.12.1] - 2024-05-30
+## [3.12.1] - 2024-05-30
 ### Changed
 - Updated to use the Nakama and Satori .NET 3.12.1 release.
 
-### [3.12.0] - 2024-04-08
+## [3.12.0] - 2024-04-08
 ### Changed
 - Updated to use the Nakama and Satori .NET 3.12.0 release.
 
@@ -21,13 +54,11 @@ The format is based on [keep a changelog](http://keepachangelog.com/) and this p
 - Removed unnecessary reference to old Nakama Unity version in Demo scene.
 
 ## [3.11.0] - 2024-03-08
-
 ### Changed
 - Default socket adapter changed from `WebSocketAdapter` to `WebSocketStdlibAdapter`. This was done to utilize the native .NET Websocket library for improved stability and maintenance.
 - Updated to use the Nakama and Satori .NET 3.11.0 release.
 
 ## [3.10.1] - 2023-12-12
-
 ### Changed
 - Retry functionality restored for `UnityWebRequest.Result.ConnectionError`.
 

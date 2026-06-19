@@ -11,23 +11,23 @@ namespace NSYNK.HyperSlides.Core
 {
     public class HyperslidesAudioManager : Singleton<HyperslidesAudioManager>
     {
+        public bool UseMic = false;
+        public float Sensitivity = 100f;
+        public int NumChannels { private set; get; } = 0;
+
         [SerializeField, ReadOnly]
         private float masterVolume = 1.0f; // Master volume for all audio listeners
-
-        public bool useMic = false;
+        [SerializeField, ReadOnly]
+        private List<float> audioLevelsPerChannel = new List<float>();
+        private const string MasterVolumeKey = "HS_MasterVolume";
 
         private AudioClip microphoneInput;
         private bool microphoneInitialized = false;
-        public float sensitivity = 100f;
+
+#if UNITY_IOS && !UNITY_EDITOR
         private Coroutine microphoneCoroutine;
-
-        
-        private int AudioClipDuration = 100;
-
-        private List<NSYNK.KalmanFilter> kalmanFilters = new List<NSYNK.KalmanFilter>();
-
-        [SerializeField, ReadOnly]
-        private List<float> audioLevelsPerChannel = new List<float>();
+        private int audioClipDuration = 100;
+#endif
 
         public List<float> AudioLevelsPerChannel
         {
@@ -39,12 +39,7 @@ namespace NSYNK.HyperSlides.Core
             }
         }
 
-        public int NumChannels { private set; get; } = 0;
-
-        private const string MasterVolumeKey = "HS_MasterVolume";
-
-        // Start is called once before the first execution of Update after the MonoBehaviour is created
-        void Start()
+        private void Start()
         {
             // Load saved master volume or use default
             if (PlayerPrefs.HasKey(MasterVolumeKey))
@@ -58,29 +53,29 @@ namespace NSYNK.HyperSlides.Core
             }
         }
 
+#if UNITY_IOS && !UNITY_EDITOR
         private void OnEnable()
         {
-#if UNITY_IOS
-            microphoneInput = Microphone.Start(Microphone.devices[0], true, AudioClipDuration, 44100);
+            microphoneInput = Microphone.Start(Microphone.devices[0], true, audioClipDuration, 44100);
             microphoneInitialized = true;
-#endif
         }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
         private void OnDisable()
         {
-#if UNITY_IOS
-            Microphone.End(Microphone.devices[0]);
+            if (Microphone.devices != null && Microphone.devices.Length > 0 && Microphone.IsRecording(Microphone.devices[0]))
+                Microphone.End(Microphone.devices[0]);
             microphoneInitialized = false;
-#endif
         }
+#endif
 
-        // Update is called once per frame
-        void Update()
+#if UNITY_IOS && !UNITY_EDITOR
+        private void Update()
         {
-#if UNITY_IOS
             GetAudioLevels();
-#endif
         }
+#endif
 
         public void SetMasterVolume(float volume)
         {
@@ -97,7 +92,8 @@ namespace NSYNK.HyperSlides.Core
 
         private void GetAudioLevels()
         {
-            if (useMic && microphoneInitialized && microphoneInput != null && Microphone.IsRecording(Microphone.devices[0])) {
+            if (UseMic && microphoneInitialized && microphoneInput != null && Microphone.IsRecording(Microphone.devices[0]))
+            {
 
                 //get mic volume
                 int dec = 128;
@@ -124,7 +120,7 @@ namespace NSYNK.HyperSlides.Core
                     for (int i = 0; i < NumChannels; i++)
                     {
                         // Normalize the peak value to a range of 0 to 1
-                        float normalizedLevel = Mathf.Clamp01(Mathf.Sqrt(maxChannelLevels[i]) * sensitivity);
+                        float normalizedLevel = Mathf.Clamp01(Mathf.Sqrt(maxChannelLevels[i]) * Sensitivity);
                         if (audioLevelsPerChannel.Count <= i)
                         {
                             audioLevelsPerChannel.Add(normalizedLevel);
@@ -135,13 +131,13 @@ namespace NSYNK.HyperSlides.Core
                         }
                     }
                 }
-               
+
             }
         }
 
+#if UNITY_IOS && !UNITY_EDITOR
         private void OnApplicationPause(bool pause)
         {
-#if UNITY_IOS
             if (pause)
             {
                 // Stop the microphone when the application is paused
@@ -161,11 +157,11 @@ namespace NSYNK.HyperSlides.Core
                 // Restart the microphone when the application resumes
                 if (!microphoneInitialized)
                 {
-                    microphoneInput = Microphone.Start(Microphone.devices[0], true, AudioClipDuration, 44100);
+                    microphoneInput = Microphone.Start(Microphone.devices[0], true, audioClipDuration, 44100);
                     microphoneInitialized = true;
                 }
             }
-#endif
         }
+#endif
     }
 }

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+	<dict>
+		<key>PreferenceSpecifiers</key>
+		<array>
+			<dict>
+				<key>Type</key>
+				<string>PSGroupSpecifier</string>
+				<key>Title</key>
+				<string>Custom Server Settings</string>
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSTextFieldSpecifier</string>
+				<key>Title</key>
+				<string>Backend IP</string>
+				<key>Key</key>
+				<string>server_override_backend_ip</string>
+				<key>DefaultValue</key>
+				<string>http://192.168.1.1:3005</string>
+				<key>IsSecure</key>
+				<false />
+				<key>KeyboardType</key>
+				<string>Alphabet</string>
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSTextFieldSpecifier</string>
+				<key>Title</key>
+				<string>Nakama IP</string>
+				<key>Key</key>
+				<string>server_override_nakama_ip</string>
+				<key>DefaultValue</key>
+				<string>192.168.1.1</string>
+				<key>IsSecure</key>
+				<false />
+				<key>KeyboardType</key>
+				<string>Alphabet</string>
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSTextFieldSpecifier</string>
+				<key>Title</key>
+				<string>Nakama Port</string>
+				<key>Key</key>
+				<string>server_override_nakama_port</string>
+				<key>DefaultValue</key>
+				<string>7350</string>
+				<key>IsSecure</key>
+				<false />
+				<key>KeyboardType</key>
+				<string>NumberPad</string>
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSToggleSwitchSpecifier</string>
+				<key>Title</key>
+				<string>Nakama SSL</string>
+				<key>Key</key>
+				<string>server_override_nakama_ssl</string>
+				<key>DefaultValue</key>
+				<false />
+			</dict>
+		</array>
+	</dict>
+</plist>

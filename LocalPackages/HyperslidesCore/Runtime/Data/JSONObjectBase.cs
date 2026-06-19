@@ -10,6 +10,8 @@ namespace NSYNK.HyperSlides
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
     public class JSONObjectBase
     {
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string displayName;
         public string id;
         public DateTime createdAt;
         public DateTime updatedAt;

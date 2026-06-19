@@ -19,7 +19,8 @@ namespace NSYNK.HyperSlides.Runtime
     /// </summary>
     public class XRSlideElement : MonoBehaviour
     {
-        public enum VisibilityState {
+        public enum VisibilityState
+        {
             None = -1,
             FullyVisible = 0,
             FullyHidden = 1,
@@ -30,7 +31,18 @@ namespace NSYNK.HyperSlides.Runtime
 
         //Delegates
         public delegate void OnVisibilityStateChange(VisibilityState state);
+
+        /// <summary>
+        /// Delegate for when the dissolve changes, providing both normalized (0-1) and in/out (0-2) values
+        /// </summary>
+        /// <param name="dissolveNormalized">The normalized dissolve value (0-1)</param>
+        /// <param name="dissolveInOut">The in/out dissolve value (0-2). 0-1 is dissolving in, 1-2 is dissolving out.</param>
         public delegate void OnDissolveChange(float dissolveNormalized, float dissolveInOut);
+        
+        /// <summary>
+        /// Delegate for when a trigger changes, providing the current trigger
+        /// </summary>
+        /// <param name="trigger">The current trigger being active</param>
         public delegate void OnTriggerChange(XRSlide.Trigger trigger);
         public OnVisibilityStateChange OnVisibilityStateChanged;
         public OnDissolveChange OnDissolveChanged;
@@ -49,10 +61,10 @@ namespace NSYNK.HyperSlides.Runtime
         private float dissolveNormalized = 0;
         [SerializeField, ReadOnly]
         private float dissolveInOut = 0;
-
         public float DissolveNormalized => dissolveNormalized;
         public float DissolveInOut => dissolveInOut;
 
+        [SerializeField, ReadOnly]
         private VisibilityState visibilityState;
         public VisibilityState Visibility => visibilityState;
 
@@ -62,17 +74,22 @@ namespace NSYNK.HyperSlides.Runtime
         //Events you can hook 
         [Header("Visibility and Trigger Events")]
         public List<VisibilityStateEvent<float>> visibilityStateEvents = new List<VisibilityStateEvent<float>>();
-        public List<XRSlide.TriggerEvent> triggerEvents;
+        public List<XRSlide.TriggerEvent> triggerEvents = new List<XRSlide.TriggerEvent>();
+        public List<XRSlideAudioEvent> audioEvents = new List<XRSlideAudioEvent>();
 
         [Header("Content Addressable Reference")]
         [ReadOnly]
         public bool assetIsValid = false;
         public AssetReference assetReference;
-        private GameObject instantiatedReference;
+        private AsyncOperationHandle<GameObject> assetLoadHandle;
         [ReadOnly]
         public bool AssetActive, IsLoading = false;
         [ReadOnly]
         public GameObject rootContent;
+
+        [Header("Session Transform Override")]
+        public string guid;
+        private SessionTransformOverride sessionTransformOverride;
 
         private void Start()
         {
@@ -86,14 +103,16 @@ namespace NSYNK.HyperSlides.Runtime
         /// </summary>
         private void OnEnable()
         {
+            CreateAudioSources();
             ValidateRootContent();
+            SetupSessionTransformOverride();
 
-            XRSlideManager.ONXRSlidePreload += PreloadAsset;
-            XRSlideManager.ONXRSlidePrepare += Prepare;
-            XRSlideManager.OnXRSlideChanged += UpdateVisibility;
-            XRSlideManager.OnXRTriggerChanged += UpdateTrigger;
-            XRSlideManager.OnDissolveInProgress += UpdateDissolveInProgress;
-            XRSlideManager.OnDissolveOutProgress += UpdateDissolveOutProgress;
+            XRSlideManager.Instance.OnXRSlidePreload += PreloadAsset;
+            XRSlideManager.Instance.OnXRSlidePrepare += Prepare;
+            XRSlideManager.Instance.OnXRSlideChanged += UpdateVisibility;
+            XRSlideManager.Instance.OnXRTriggerChanged += UpdateTrigger;
+            XRSlideManager.Instance.OnDissolveInProgress += UpdateDissolveInProgress;
+            XRSlideManager.Instance.OnDissolveOutProgress += UpdateDissolveOutProgress;
 
             SetVisibilityState(VisibilityState.FullyHidden);
 
@@ -107,12 +126,15 @@ namespace NSYNK.HyperSlides.Runtime
         /// </summary>
         private void OnDisable()
         {
-            XRSlideManager.ONXRSlidePreload -= PreloadAsset;
-            XRSlideManager.ONXRSlidePrepare -= Prepare;
-            XRSlideManager.OnXRSlideChanged -= UpdateVisibility;
-            XRSlideManager.OnXRTriggerChanged -= UpdateTrigger;
-            XRSlideManager.OnDissolveInProgress -= UpdateDissolveInProgress;
-            XRSlideManager.OnDissolveOutProgress -= UpdateDissolveOutProgress;
+            if (XRSlideManager.Instance == null)
+                return;
+                
+            XRSlideManager.Instance.OnXRSlidePreload -= PreloadAsset;
+            XRSlideManager.Instance.OnXRSlidePrepare -= Prepare;
+            XRSlideManager.Instance.OnXRSlideChanged -= UpdateVisibility;
+            XRSlideManager.Instance.OnXRTriggerChanged -= UpdateTrigger;
+            XRSlideManager.Instance.OnDissolveInProgress -= UpdateDissolveInProgress;
+            XRSlideManager.Instance.OnDissolveOutProgress -= UpdateDissolveOutProgress;
 
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.delayCall -= ValidateRootContent;
@@ -135,60 +157,70 @@ namespace NSYNK.HyperSlides.Runtime
             visibilityStateEvents.ForEach(vse => vse.Validate());
         }
 
-        private async void OnValidate()
+        private void OnValidate()
         {
-            try
+            CheckForGUID();
+
+            assetIsValid = ValidAsset();
+        }
+
+        private void SetupSessionTransformOverride()
+        {
+            if (sessionTransformOverride == null)
             {
-                var locations = await Addressables.LoadResourceLocationsAsync(assetReference).Task;
-                assetIsValid = locations != null && locations.Count > 0;
+                sessionTransformOverride = gameObject.AddComponent<SessionTransformOverride>();
+                sessionTransformOverride.guid = guid;
             }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Error validating AssetReference for {gameObject.name}: {ex.Message}");
-                assetIsValid = false;
-            }
+        }
+
+        private void CheckForGUID()
+        {
+            if (string.IsNullOrEmpty(guid))
+                guid = Guid.NewGuid().ToString();
         }
 
         /// <summary>
         /// Check if the asset reference is set and returning a runtimekey
         /// </summary>
         /// <returns></returns>
-        public bool ValidAsset() => !string.IsNullOrEmpty(assetReference.RuntimeKey.ToString());
+        public bool ValidAsset() => assetReference != null && assetReference.RuntimeKeyIsValid();
 
         /// <summary>
         /// Load the asset reference, if there is one, its not currently loading and if its not instantiated already
         /// </summary>
         public async void LoadAssetReference()
         {
-            if (!ValidAsset() || instantiatedReference || IsLoading)
+            if (!ValidAsset() || AssetActive || IsLoading)
                 return;
 
             IsLoading = true;
 
-            //Check if the addressable actually exists
-            var locations = await Addressables.LoadResourceLocationsAsync(assetReference).Task;
-            if (locations != null && locations.Count > 0)
+            try
             {
-                AsyncOperationHandle<GameObject> assetLoader = Addressables.InstantiateAsync(assetReference, rootContent.transform, false);
-                await assetLoader.Task;
-
-                if (assetLoader.Status == AsyncOperationStatus.Succeeded)
+                if (assetReference != null)
                 {
-                    //Debug.Log("Load asset reference: " + assetLoader.Result);
+                    assetLoadHandle = assetReference.InstantiateAsync(rootContent.transform, false);
+                    await assetLoadHandle.Task;
 
-                    instantiatedReference = assetLoader.Result;
-                    AssetActive = true;
-                    IsLoading = false;
+                    if (assetLoadHandle.Status == AsyncOperationStatus.Succeeded)
+                        AssetActive = true;
+                    else
+                    {
+                        if (visibilityState == VisibilityState.FullyHidden)
+                            UnloadAssetReference();
+                    }
                 }
                 else
                 {
-                    if (visibilityState == VisibilityState.FullyHidden)
-                        UnloadAssetReference();
+                    Debug.LogWarning("AssetReference is not set for " + gameObject.name, this);
                 }
             }
-            else
+            catch (Exception e)
             {
-                Debug.LogWarning("Error in loading asset: " + assetReference);
+                Debug.LogError($"Error loading asset reference for {gameObject.name}: {e.Message}");
+            }
+            finally
+            {
                 AssetActive = true;
                 IsLoading = false;
             }
@@ -199,16 +231,21 @@ namespace NSYNK.HyperSlides.Runtime
         /// </summary>
         public void UnloadAssetReference()
         {
-            if (AssetActive)
-            {
-                //Debug.Log("Unload asset reference: " + assetLoader.Result);
+            if (assetReference.IsValid())
+                assetReference.ReleaseAsset();
 
-                Addressables.ReleaseInstance(instantiatedReference);
-                instantiatedReference = null;
-                AssetActive = false;
+            if (assetLoadHandle.IsValid())
+                assetLoadHandle.Release();
 
-                //Resources.UnloadUnusedAssets();
-            }
+            AssetActive = false;
+        }
+
+        /// <summary>
+        /// Create audio sources for all audio events
+        /// </summary>
+        private void CreateAudioSources()
+        {
+            audioEvents.ForEach(ae => ae.CreateAudioSource(gameObject));
         }
 
         /// <summary>
@@ -220,7 +257,7 @@ namespace NSYNK.HyperSlides.Runtime
 
             OnDissolveChanged?.Invoke(0, 0);
 
-            if(rootContent)
+            if (rootContent)
                 rootContent.SetActive(false);
         }
 
@@ -277,15 +314,15 @@ namespace NSYNK.HyperSlides.Runtime
             bool isVisible = visibilityState != VisibilityState.FullyHidden && visibilityState != VisibilityState.WillDissolve;
 
             if (!isVisible && shouldBeVisible)
-                XRSlideManager.SetDissolveInDuration(DissolveInDuration);
+                XRSlideManager.Instance.SetDissolveInDuration(DissolveInDuration);
 
-            if(isVisible && !shouldBeVisible)
-                XRSlideManager.SetDissolveOutDuration(DissolveOutDuration);
+            if (isVisible && !shouldBeVisible)
+                XRSlideManager.Instance.SetDissolveOutDuration(DissolveOutDuration);
 
             switch (visibilityState)
             {
                 case VisibilityState.WillDissolve:
-                    if(isVisible)
+                    if (isVisible)
                         SetVisibilityState(shouldBeVisible ? VisibilityState.DissolvingIn : VisibilityState.DissolvingOut);
                     break;
                 case VisibilityState.DissolvingIn:
@@ -303,8 +340,8 @@ namespace NSYNK.HyperSlides.Runtime
             }
 
             if (shouldBeVisible || AssetActive)
-                if(ValidAsset())
-                    XRSlideManager.RegisterSlideElement(this, shouldBeVisible);
+                if (ValidAsset())
+                    XRSlideManager.Instance.RegisterSlideElement(this, shouldBeVisible);
         }
 
         /// <summary>
@@ -316,7 +353,7 @@ namespace NSYNK.HyperSlides.Runtime
             bool shouldBeVisible = ShouldBeVisible(slide);
 
             if (shouldBeVisible && ValidAsset())
-                XRSlideManager.RegisterSlideElement(this, shouldBeVisible);
+                XRSlideManager.Instance.RegisterSlideElement(this, shouldBeVisible);
         }
 
         /// <summary>
@@ -326,7 +363,7 @@ namespace NSYNK.HyperSlides.Runtime
         /// <returns></returns>
         private bool ShouldBeVisible(XRSlide slide)
         {
-            if( slide != null )
+            if (slide != null)
                 return slide.contentTags.Find(tag => tag.name == ContentTag) != null;
             else
                 return false;
@@ -386,7 +423,11 @@ namespace NSYNK.HyperSlides.Runtime
 
             OnDissolveChanged?.Invoke(dissolveNormalized, dissolveInOut);
 
-            visibilityStateEvents.ForEach(e => {
+            if (dissolveNormalized >= 1)
+                SetVisibilityState(VisibilityState.FullyVisible);
+
+            visibilityStateEvents.ForEach(e =>
+            {
                 if (e.visibilityState == visibilityState)
                     e.unityEvent.Invoke(dissolveNormalized);
             });
@@ -412,7 +453,11 @@ namespace NSYNK.HyperSlides.Runtime
 
             OnDissolveChanged?.Invoke(dissolveNormalized, dissolveInOut);
 
-            visibilityStateEvents.ForEach(e => {
+            if (dissolveNormalized <= 0)
+                SetVisibilityState(VisibilityState.FullyHidden);
+
+            visibilityStateEvents.ForEach(e =>
+            {
                 if (e.visibilityState == visibilityState)
                     e.unityEvent.Invoke(dissolveNormalized);
             });
@@ -432,9 +477,21 @@ namespace NSYNK.HyperSlides.Runtime
             OnDissolveChanged?.Invoke(dissolveNormalized, dissolveInOut);
             OnVisibilityStateChanged?.Invoke(visibilityState);
 
-            visibilityStateEvents.ForEach(e => {
+            visibilityStateEvents.ForEach(e =>
+            {
                 if (e.visibilityState == visibilityState)
                     e.unityEvent.Invoke(0);
+            });
+
+            //Play audio events
+            audioEvents.ForEach(ae =>
+            {
+                if (ae.triggerState == visibilityState)
+                    ae.Play();
+                else if (visibilityState == VisibilityState.WillDissolve)
+                    ae.PreloadAsset();
+                else if (visibilityState == VisibilityState.FullyHidden)
+                    ae.Release();
             });
         }
     }

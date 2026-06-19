@@ -9,10 +9,10 @@ namespace NSYNK.HyperSlides.EditorScripts
     /// It allows you to extend the default functionality of the Button class while adding
     /// additional features like confirmation prompts and global timeouts.
     /// </summary>
-    [CustomEditor(typeof(UIButton), false)]
+    [CustomEditor(typeof(UIButton), true)]
     public class UIButtonEditor : ButtonEditor
     {
-        SerializedProperty needsConfirmation, confirmationPrompt, useGlobalTimeout;
+        SerializedProperty needsConfirmation, confirmationPrompt, useGlobalTimeout, trackingMaterial, canBeToggled, toggleOnColor, toggleOffColor;
 
         protected override void OnEnable()
         {
@@ -21,6 +21,10 @@ namespace NSYNK.HyperSlides.EditorScripts
             useGlobalTimeout = serializedObject.FindProperty("useGlobalTimeout");
             needsConfirmation = serializedObject.FindProperty("needsConfirmation");
             confirmationPrompt = serializedObject.FindProperty("confirmationPrompt");
+            trackingMaterial = serializedObject.FindProperty("trackingMaterial");
+            canBeToggled = serializedObject.FindProperty("canBeToggled");
+            toggleOnColor = serializedObject.FindProperty("toggleOnColor");
+            toggleOffColor = serializedObject.FindProperty("toggleOffColor");
         }
 
         public override void OnInspectorGUI()
@@ -32,8 +36,19 @@ namespace NSYNK.HyperSlides.EditorScripts
             EditorGUILayout.PropertyField(useGlobalTimeout);
             EditorGUILayout.PropertyField(needsConfirmation);
 
-            if(needsConfirmation.boolValue == true)
+            if (needsConfirmation.boolValue == true)
                 EditorGUILayout.PropertyField(confirmationPrompt);
+
+            EditorGUILayout.PropertyField(canBeToggled);
+
+            if (trackingMaterial != null)
+                EditorGUILayout.PropertyField(trackingMaterial);
+
+            if (canBeToggled.boolValue)
+            {
+                EditorGUILayout.PropertyField(toggleOnColor);
+                EditorGUILayout.PropertyField(toggleOffColor);
+            }
 
             serializedObject.ApplyModifiedProperties();
         }

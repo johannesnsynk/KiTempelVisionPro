@@ -23,7 +23,13 @@ namespace NSYNK.HyperSlides.UI
         [Header("Needs confirmation before running the event?")]
         public bool useGlobalTimeout = false;
         public bool needsConfirmation = false;
+        public bool canBeToggled = false;
         public string confirmationPrompt = "Do you want to continue?";
+        public Color toggleOffColor = Color.white;
+        public Color toggleOnColor = Color.green;
+
+        private Image iconImage;
+        private bool toggled = false;        
 
         protected override void OnEnable()
         {
@@ -61,6 +67,9 @@ namespace NSYNK.HyperSlides.UI
             {
                 onClick?.Invoke();
 
+                if (canBeToggled)
+                    Toggle();
+
                 if (!useGlobalTimeout)
                     return;
 
@@ -86,10 +95,38 @@ namespace NSYNK.HyperSlides.UI
 
         public virtual void EnableInteraction()
         {
-            Dispatcher.Enqueue(() => {
-                interactable = !XRUIManager.TimerRunning() && !XRUIManager.Instance.LoadingActionInProgress;
+            Dispatcher.Enqueue(() =>
+            {
+                if (this != null)
+                    interactable = !XRUIManager.TimerRunning() && !XRSlideManager.LoadingActionInProgress;
                 // interactable = !XRUIManager.TimerRunning();
             });
+        }
+
+        public void Toggle(bool toggleState)
+        {
+            if (toggled != toggleState)
+                Toggle();
+        }
+
+        private void Toggle()
+        {
+            if (!canBeToggled)
+                return;
+
+            toggled = !toggled;
+
+            if (iconImage == null && transform.childCount > 0)
+                iconImage = transform.GetChild(0).GetComponent<Image>();
+
+            if (iconImage != null)
+                iconImage.color = toggled ? toggleOnColor : toggleOffColor;
+            else
+            {
+                ColorBlock colors = this.colors;
+                colors.normalColor = toggled ? toggleOnColor : toggleOffColor;
+                this.colors = colors;
+            }
         }
 
         private async void WaitForConfirmation()
@@ -100,6 +137,9 @@ namespace NSYNK.HyperSlides.UI
             if (userConfirmation.Result)
             {
                 onClick?.Invoke();
+
+                if (canBeToggled)
+                    Toggle();
 
                 if (!useGlobalTimeout)
                     return;

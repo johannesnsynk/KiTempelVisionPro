@@ -14,18 +14,18 @@ namespace NSYNK.HyperSlides.UI
 
         private void OnEnable()
         {
-            XRNetworkManager.onUserConnected += UpdateUIItems;
+            XRNetworkManager.Instance.OnUserConnected += UpdateUIItems;
             UpdateUIItems();
         }
 
         private void OnDisable()
         {
-            XRNetworkManager.onUserConnected -= UpdateUIItems;
+            XRNetworkManager.Instance.OnUserConnected -= UpdateUIItems;
         }
 
         private void UpdateUIItems()
         {
-            moderatorSpecificUI.ForEach(ui => ui.SetActive(DeviceInfo.Role >= XRPlayer.Role.Moderator));
+            moderatorSpecificUI.ForEach(ui => ui.SetActive(DeviceInfo.Instance.Role >= XRPlayer.Role.Moderator));
             deviceName.text = $"({PlayerPrefs.GetString("sessionCode", "")}) {PlayerPrefs.GetString("DeviceName", "")}";
         }
     }

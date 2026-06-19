@@ -20,20 +20,16 @@ namespace NSYNK.HyperSlides.Runtime
 
         private void OnEnable()
         {
-            string assemblyName = currentClassName + ", NSYNK.Hyperslides.Runtime";
-            Type type = Type.GetType(assemblyName);
-
-            if (type != null)
-            {
-                FieldInfo fieldInfo = type.BaseType.GetField("Instance");
-
-                if(fieldInfo != null)
-                    classRuntimeObject = (fieldInfo.GetValue(currentClass) as MonoBehaviour);
-            }
+            CheckOnRuntimeObject();
         }
 
+        /// <summary>
+        /// Calls the method without parameters
+        /// </summary>
         public void CallMethod()
         {
+            CheckOnRuntimeObject();
+
             if (classRuntimeObject)
             {
                 Debug.Log(currentMethod, classRuntimeObject);
@@ -41,12 +37,47 @@ namespace NSYNK.HyperSlides.Runtime
             }
         }
 
+        /// <summary>
+        /// Calls the method with an object parameter
+        /// </summary>
+        /// <param name="obj"></param>
         public void CallMethod(UnityEngine.Object obj = null)
         {
+            CheckOnRuntimeObject();
+
             if (classRuntimeObject)
             {
                 Debug.Log(currentMethod + " => " + obj, classRuntimeObject);
                 classRuntimeObject.SendMessage(currentMethod, obj);
+            }
+        }
+
+        /// <summary>
+        /// Checks if the runtime object is assigned, if not it tries to find it in the scene
+        /// </summary>
+        private void CheckOnRuntimeObject()
+        {
+            if (classRuntimeObject == null)
+            {
+                Type type = null;
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    type = assembly.GetType(currentClassName);
+                    if (type != null)
+                        break;
+                }
+
+                if (type != null)
+                {
+                    classRuntimeObject = FindAnyObjectByType(type.BaseType) as MonoBehaviour;
+
+                    if (classRuntimeObject == null)
+                        Debug.LogWarning("InspectorClassMethods: Could not find an instance of " + currentClassName + " in the scene.");
+                }
+                else
+                {
+                    Debug.LogWarning("InspectorClassMethods: Could not find type " + currentClassName + " in the assemblies.");
+                }
             }
         }
     }

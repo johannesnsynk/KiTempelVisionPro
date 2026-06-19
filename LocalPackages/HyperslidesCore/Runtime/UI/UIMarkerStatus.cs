@@ -6,7 +6,7 @@ namespace NSYNK.HyperSlides.UI
 {
     public class UIMarkerStatus : MonoBehaviour
     {
-        public XRWorldAnchor.AnchorType type;
+        public XRWorldAnchor.WorldAnchorType type;
 
         private TextMeshProUGUI markerStatusText;
 
@@ -23,7 +23,7 @@ namespace NSYNK.HyperSlides.UI
                 return;
             }
 
-            markerStatusText.text = type == XRWorldAnchor.AnchorType.Position ?
+            markerStatusText.text = type == XRWorldAnchor.WorldAnchorType.Position ?
                 XRAnchorManager.Instance.positionAnchor.trackedAnchor ? "Position: " + XRAnchorManager.Instance.positionAnchor.trackedAnchor.trackingState.ToString() : "Position anchor missing" :
                 XRAnchorManager.Instance.rotationAnchor.trackedAnchor ? "Rotation: " + XRAnchorManager.Instance.rotationAnchor.trackedAnchor.trackingState.ToString() : "Rotation anchor missing" ;        }
     }

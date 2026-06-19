@@ -15,18 +15,8 @@ namespace NSYNK.HyperSlides.UI
 
         private List<IApiMatch> apiMatches = new();
 
-        private void OnEnable()
-        {
-            XRNetworkManager.onMatchListUpdate += UpdateDropdownOptions;
-
-            if(XRNetworkManager.Instance)
-                UpdateDropdownOptions(XRNetworkManager.FilteredMatchList);
-        }
-
-        private void OnDisable()
-        {
-            XRNetworkManager.onMatchListUpdate -= UpdateDropdownOptions;
-        }
+        private void OnEnable() => XRNetworkManager.Instance.OnMatchListUpdate += UpdateDropdownOptions;
+        private void OnDisable() => XRNetworkManager.Instance.OnMatchListUpdate -= UpdateDropdownOptions;
 
         /// <summary>
         /// Update the current dropdown options based on the matches from network
@@ -39,6 +29,9 @@ namespace NSYNK.HyperSlides.UI
 
             Dispatcher.Enqueue(() =>
             {
+                if (sessionHolder == null)
+                    return;
+
                 apiMatches = new List<IApiMatch>(matches);
 
                 foreach (Transform t in sessionHolder.transform)
@@ -51,10 +44,21 @@ namespace NSYNK.HyperSlides.UI
 
                 foreach (IApiMatch match in apiMatches)
                 {
+                    if (match == null)
+                        continue;
+
                     UISessionButton newSessionButton = Instantiate(sessionButtonPrefab, sessionHolder, false).GetComponent<UISessionButton>();
                     newSessionButton.Init(match);
                 }
+
+                CreateLogOutButton();
             });
+        }
+
+        private void CreateLogOutButton()
+        {
+            UISessionButton newSessionButton = Instantiate(sessionButtonPrefab, sessionHolder, false).GetComponent<UISessionButton>();
+            newSessionButton.Init("Log out");
         }
     }
 }

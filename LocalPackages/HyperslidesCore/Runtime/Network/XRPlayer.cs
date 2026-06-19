@@ -2,7 +2,7 @@ using Nakama;
 
 using NSYNK.HyperSlides.Runtime;
 using NSYNK.HyperSlides.XR;
-
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.Hands;
@@ -18,7 +18,8 @@ namespace NSYNK.HyperSlides.Network
         public string UserId, Username;
         public Vector3 localPosition;
         public Quaternion localRotation;
-        public enum Role {
+        public enum Role
+        {
             Inherit = -1,
             Broadcast = 0,
             Simulation = 1,
@@ -26,6 +27,37 @@ namespace NSYNK.HyperSlides.Network
             Moderator = 3,
             Admin = 4
         };
+
+        public enum FilterMethod
+        {
+            None = 0,
+            Lerp = 1,
+            Kalman = 2,
+            KalmanQueue = 3,
+            OneEuro = 4
+        }
+
+        public FilterMethod filterMethod = FilterMethod.OneEuro;
+
+        /// <summary>
+        /// Kalman filter used to smooth the position updates over time.
+        /// </summary>
+        private KalmanFilter positionKalmanFilter = new KalmanFilter(0.1f, 0.1f, Vector3.zero, Vector3.one);
+        private KalmanFilter leftPointerPositionKalmanFilter = new KalmanFilter(0.1f, 0.1f, Vector3.zero, Vector3.one);
+        private KalmanFilter rightPointerPositionKalmanFilter = new KalmanFilter(0.1f, 0.1f, Vector3.zero, Vector3.one);
+        /// <summary>
+        /// Kalman filter used to smooth the rotation updates over time.
+        /// </summary>
+        private QuaternionKalmanFilter quaternionKalmanFilter = new QuaternionKalmanFilter(0.1f, 0.1f, Quaternion.identity, 1.0f);
+        private QuaternionKalmanFilter leftPointerQuaternionKalmanFilter = new QuaternionKalmanFilter(0.1f, 0.1f, Quaternion.identity, 1.0f);
+        private QuaternionKalmanFilter rightPointerQuaternionKalmanFilter = new QuaternionKalmanFilter(0.1f, 0.1f, Quaternion.identity, 1.0f);
+
+        private OneEuroFilter positionOneEuroFilter = new OneEuroFilter(60f, 1.0f, 0.0f, 1.0f);
+        private OneEuroFilter leftPointerOneEuroFilter = new OneEuroFilter(60f, 1.0f, 0.0f, 1.0f);
+        private OneEuroFilter rightPointerOneEuroFilter = new OneEuroFilter(60f, 1.0f, 0.0f, 1.0f);
+        private OneEuroFilterQuaternion rotationOneEuroFilter = new OneEuroFilterQuaternion(60f, 1.0f, 0.0f, 1.0f);
+        private OneEuroFilterQuaternion leftPointerRotationOneEuroFilter = new OneEuroFilterQuaternion(60f, 1.0f, 0.0f, 1.0f);
+        private OneEuroFilterQuaternion rightPointerRotationOneEuroFilter = new OneEuroFilterQuaternion(60f, 1.0f, 0.0f, 1.0f);
 
         [Header("Player Runtime Objects")]
         public Role role;
@@ -48,19 +80,32 @@ namespace NSYNK.HyperSlides.Network
         public float pointerHideTimer = 0;
         private Vector3 yRotation = new();
         private XRHandSubsystem m_HandSubsystem;
+        private DateTime lastUpdateTime = DateTime.MinValue;
+        private GameObject avatarPrefabInstance;
 
         private void OnEnable()
         {
-            XRNetworkManager.onNetworkPlayerUpdate += UpdatePlayer;
-            XRNetworkManager.onNetworkModeratorUpdate += UpdateModerator;
-            RuntimeHandler.tick += OnEditMode;
+            XRNetworkManager.Instance.OnNetworkPlayerUpdate += UpdatePlayer;
+            XRNetworkManager.Instance.OnNetworkModeratorUpdate += UpdateModerator;
+
+            positionOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+            rotationOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+            leftPointerOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+            rightPointerOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+            leftPointerRotationOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+            rightPointerRotationOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
         }
 
         private void OnDisable()
         {
-            XRNetworkManager.onNetworkPlayerUpdate -= UpdatePlayer;
-            XRNetworkManager.onNetworkModeratorUpdate -= UpdateModerator;
-            RuntimeHandler.tick -= OnEditMode;
+            if (XRNetworkManager.Instance == null)
+                return;
+
+            XRNetworkManager.Instance.OnNetworkPlayerUpdate -= UpdatePlayer;
+            XRNetworkManager.Instance.OnNetworkModeratorUpdate -= UpdateModerator;
+
+            if (RuntimeHandler.Instance == null)
+                return;
         }
 
         /// <summary>
@@ -115,32 +160,27 @@ namespace NSYNK.HyperSlides.Network
         /// <param name="xrPlayer"></param>
         public void UpdatePlayer(XRNetworkObjects.XRPlayer xrPlayer)
         {
-            if(nameTag)
-                nameTag.gameObject.SetActive(RuntimeHandler.Settings.showNameTags);
-
             if (xrPlayer.UserId != UserId || role == Role.Simulation || role == Role.Broadcast)
                 return;
 
-            if (nameTag)
-                nameTag.SetText(Username);
-
             localPosition = xrPlayer.position;
             localRotation = Quaternion.Euler(xrPlayer.rotation);
+            lastUpdateTime = xrPlayer.timeStamp;
         }
 
         /// <summary>
         /// Update the moderator including pointer
         /// </summary>
         /// <param name="xrModerator"></param>
-        public void UpdateModerator(XRNetworkObjects.XRModerator xrModerator)
+        public void UpdateModerator(XRNetworkObjects.XRPlayer xrModerator)
         {
             UpdatePlayer(xrModerator);
 
-            if (xrModerator.leftPointer != null)
-                UpdatePointerPosition(xrModerator.leftPointer);
+            if (xrModerator.LeftPointer != null)
+                UpdatePointerPosition(xrModerator.LeftPointer);
 
-            if (xrModerator.rightPointer != null)
-                UpdatePointerPosition(xrModerator.rightPointer);
+            if (xrModerator.RightPointer != null)
+                UpdatePointerPosition(xrModerator.RightPointer);
         }
 
         /// <summary>
@@ -166,25 +206,74 @@ namespace NSYNK.HyperSlides.Network
             if (role < Role.Participant)
                 return;
 
-            xrHandLeft.transform.SetParent(transform.parent, XRContentRoot.Instance);
-            xrHandRight.transform.SetParent(transform.parent, XRContentRoot.Instance);
+            HandleHandTracking();
+        }
 
-            xrPointerLeft.transform.SetParent(XRContentRoot.Instance.transform);
-            xrPointerRight.transform.SetParent(XRContentRoot.Instance.transform);
+        /// <summary>
+        /// Show or hide the name tag based on the player settings and the player role, and update the text to the current username
+        /// </summary>
+        private void HandleNameTag()
+        {
+            if (!nameTag)
+                return;
 
-            if (localPlayer)
+            nameTag.gameObject.SetActive(HyperSlidesStateManager.Instance.Settings.showNameTags && role >= Role.Participant);
+            nameTag.SetText(Username);
+        }
+
+        /// <summary>
+        /// Instantiate the avatar prefab if the player role is above the set visibility role in the settings, so spectators don't have any unnecessary objects in their scene
+        /// </summary>
+        private void HandleAvatarPrefab()
+        {
+            if (!HyperSlidesStateManager.Instance.Settings.avatarPrefab || localPlayer)
             {
-                if (role == Role.Moderator)
-                    EnableHandSystem();
-                else
-                    DisableHandSystem();
+                if (avatarPrefabInstance != null)
+                {
+                    Destroy(avatarPrefabInstance);
+                    avatarPrefabInstance = null;
+                }
+                return;
             }
 
-            //Show the avatar prefab, if the role is equal or above the settings role
-            if (!localPlayer
-                && RuntimeHandler.Settings.avatarPrefab
-                && role >= RuntimeHandler.Settings.avatarVisibilityRole)
-                Instantiate(RuntimeHandler.Settings.avatarPrefab, head);
+            if (role >= HyperSlidesStateManager.Instance.Settings.avatarVisibilityRole && avatarPrefabInstance == null)
+                avatarPrefabInstance = Instantiate(HyperSlidesStateManager.Instance.Settings.avatarPrefab, head);
+        }
+
+        /// <summary>
+        /// Enable the hand system and show the pointers for the moderator, disable for other roles. This is necessary to trigger the hand updates in the hand processor and show the correct pointer visibility based on the networked values
+        /// </summary>
+        private void HandleHandTracking()
+        {
+            if (role >= Role.Participant)
+            {
+                //Enable hand system for local player to trigger hand updates in the hand processor and show pointers for moderators
+                EnableHandSystem();
+
+                if (!xrHandLeft || !xrHandRight)
+                {
+                    Debug.LogError("Hand references not set for player: " + UserId, this);
+                    return;
+                }
+
+                xrHandLeft.transform.SetParent(transform.parent, XRContentRoot.Instance);
+                xrHandRight.transform.SetParent(transform.parent, XRContentRoot.Instance);
+
+                // Set pointer parent for moderators
+                if (role == Role.Moderator)
+                {
+                    if (!xrPointerLeft || !xrPointerRight)
+                    {
+                        Debug.LogError("Pointer references not set for player: " + UserId, this);
+                        return;
+                    }
+
+                    xrPointerLeft.transform.SetParent(XRContentRoot.Instance.transform);
+                    xrPointerRight.transform.SetParent(XRContentRoot.Instance.transform);
+                }
+            }
+            else
+                DisableHandSystem();
         }
 
         /// <summary>
@@ -193,17 +282,17 @@ namespace NSYNK.HyperSlides.Network
         /// <param name="networkObject">The networkobject with all relevant values</param>
         private void UpdatePointerPosition(XRNetworkObjects.XRPointer networkObject)
         {
-            if(UserId == networkObject.UserId && !localPlayer)
+            if (UserId == networkObject.UserId && !localPlayer)
             {
-                if (role == Role.Moderator && RuntimeHandler.Settings.ShowModeratorPointer)
+                if (role == Role.Moderator && HyperSlidesStateManager.Instance.Settings.ShowModeratorPointer)
                 {
-                    if (networkObject.handedness == Handedness.Left)
+                    if (networkObject.handedness == Handedness.Left.ToString())
                     {
                         xrPointerLeft.gameObject.SetActive(networkObject.visible);
                         xrPointerLeftPos = networkObject.position;
                         xrPointerLeftRot = Quaternion.Euler(networkObject.rotation);
                     }
-                    if (networkObject.handedness == Handedness.Right)
+                    if (networkObject.handedness == Handedness.Right.ToString())
                     {
                         xrPointerRight.gameObject.SetActive(networkObject.visible);
                         xrPointerRightPos = networkObject.position;
@@ -232,16 +321,49 @@ namespace NSYNK.HyperSlides.Network
             yRotation.x = 0;
             yRotation.z = 0;
 
-            transform.localPosition = Vector3.Lerp(transform.localPosition, localPosition, Time.deltaTime * RuntimeHandler.Settings.playerPositionEasing);
-            transform.localRotation = Quaternion.LerpUnclamped(transform.localRotation, Quaternion.Euler(0, localRotation.eulerAngles.y, 0), Time.deltaTime * RuntimeHandler.Settings.playerRotationEasing);
+            switch (filterMethod)
+            {
+                case FilterMethod.None:
+                    transform.localPosition = localPosition;
+                    transform.localRotation = Quaternion.Euler(0, localRotation.eulerAngles.y, 0);
+                    if (head)
+                        head.localRotation = Quaternion.Euler(localRotation.eulerAngles.x, 0, 0);
+                    break;
+                case FilterMethod.Lerp:
+                    transform.localPosition = Vector3.Lerp(transform.localPosition, localPosition, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.playerPositionEasing);
+                    transform.localRotation = Quaternion.LerpUnclamped(transform.localRotation, Quaternion.Euler(0, localRotation.eulerAngles.y, 0), Time.deltaTime * HyperSlidesStateManager.Instance.Settings.playerRotationEasing);
 
-            if (head)
-                head.localRotation = Quaternion.LerpUnclamped(head.localRotation, Quaternion.Euler(localRotation.eulerAngles.x, 0, 0), Time.deltaTime * RuntimeHandler.Settings.playerHeadRotationEasing);
+                    if (head)
+                        head.localRotation = Quaternion.LerpUnclamped(head.localRotation, Quaternion.Euler(localRotation.eulerAngles.x, 0, 0), Time.deltaTime * HyperSlidesStateManager.Instance.Settings.playerHeadRotationEasing);
+                    break;
+                case FilterMethod.Kalman:
+                    //Kalman filtering not implemented for player transform yet
+                    transform.localPosition = positionKalmanFilter.Update(localPosition);
+                    Quaternion tempRotation = quaternionKalmanFilter.Update(localRotation);
+                    transform.localRotation = Quaternion.Euler(0, tempRotation.eulerAngles.y, 0);
+                    if (head)
+                        head.localRotation = Quaternion.Euler(tempRotation.eulerAngles.x, 0, 0);
+                    break;
+                case FilterMethod.KalmanQueue:
+                    //Kalman queue filtering not implemented for player transform yet
+                    Debug.Log("Kalman queue filtering not implemented for player transform yet");
+                    break;
+                case FilterMethod.OneEuro:
+                    //OneEuro filtering not implemented for player transform yet
+                    transform.localPosition = positionOneEuroFilter.Update(localPosition);
+                    Quaternion tempOneEuroRotation = rotationOneEuroFilter.Update(localRotation);
+                    transform.localRotation = Quaternion.Euler(0, tempOneEuroRotation.eulerAngles.y, 0);
+                    if (head)
+                        head.localRotation = Quaternion.Euler(tempOneEuroRotation.eulerAngles.x, 0, 0);
+                    break;
+            }
+
+
         }
 
         private void HidePointerAfterTime()
         {
-            pointerHideTimer = RuntimeHandler.Settings.pointerHideTimer;
+            pointerHideTimer = HyperSlidesStateManager.Instance.Settings.pointerHideTimer;
         }
 
         /// <summary>
@@ -249,18 +371,21 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         private void Update()
         {
+            HandleNameTag();
+            HandleAvatarPrefab();
+
             //Use spectator specific position and rotation code without any pointer logic
-            if(role == Role.Simulation || role == Role.Broadcast)
+            if (role == Role.Simulation || role == Role.Broadcast || role == Role.Admin)
                 return;
 
             //Only process if not spectator and all inspector values have been set
-            if (!localPlayer && RuntimeHandler.Settings.ShowModeratorPointer)
+            if (!localPlayer && HyperSlidesStateManager.Instance.Settings.ShowModeratorPointer)
             {
-                if(xrPointerLeft.gameObject.activeInHierarchy)
-                    LerpLocalPointerPosition(xrPointerLeft.transform, xrPointerLeftPos, xrPointerLeftRot, RuntimeHandler.Settings.pointerEasing);
+                if (xrPointerLeft.gameObject.activeInHierarchy)
+                    LerpLocalPointerPosition(xrPointerLeft.transform, xrPointerLeftPos, xrPointerLeftRot, HyperSlidesStateManager.Instance.Settings.pointerEasing);
 
                 if (xrPointerRight.gameObject.activeInHierarchy)
-                    LerpLocalPointerPosition(xrPointerRight.transform, xrPointerRightPos, xrPointerRightRot, RuntimeHandler.Settings.pointerEasing);
+                    LerpLocalPointerPosition(xrPointerRight.transform, xrPointerRightPos, xrPointerRightRot, HyperSlidesStateManager.Instance.Settings.pointerEasing);
 
                 pointerHideTimer -= Time.deltaTime;
 
@@ -274,7 +399,7 @@ namespace NSYNK.HyperSlides.Network
             {
                 //LerpPointerPosition(xrPointerLeft.transform, xrFingertipLeft.position, xrFingertipLeft.rotation, Space.World, easingSpeed);
                 //LerpPointerPositionAndRotation(xrPointerRight.transform, xrFingertipRight.position, xrFingertipRight.rotation, Space.World, easingSpeed);
-                if (role != Role.Moderator || !RuntimeHandler.Settings.ShowModeratorPointer)
+                if (role != Role.Moderator || !HyperSlidesStateManager.Instance.Settings.ShowModeratorPointer)
                     return;
 
                 if (xrPointerRight.gameObject.activeInHierarchy)
@@ -302,8 +427,8 @@ namespace NSYNK.HyperSlides.Network
             pointer.transform.position = Vector3.Lerp(
                     pointer.transform.position,
                     fingerTip.position + averageDirection,
-                    Time.deltaTime * RuntimeHandler.Settings.localPointerEasing +
-                    Time.deltaTime * RuntimeHandler.Settings.localPointerEasing *
+                    Time.deltaTime * HyperSlidesStateManager.Instance.Settings.localPointerEasing +
+                    Time.deltaTime * HyperSlidesStateManager.Instance.Settings.localPointerEasing *
                     Vector3.Distance(pointer.transform.position, fingerTip.position + averageDirection)
                     );
         }
@@ -317,8 +442,31 @@ namespace NSYNK.HyperSlides.Network
         /// <param name="space"></param>
         private void LerpLocalPointerPosition(Transform target, Vector3 pos, Quaternion rot, float speed)
         {
-            target.localPosition = Vector3.Lerp(target.localPosition, pos, Time.deltaTime * speed);
-            target.localRotation = Quaternion.Lerp(target.localRotation, rot, Time.deltaTime * speed);
+            bool isLeft = target == xrPointerLeft.transform;
+            switch (filterMethod)
+            {
+                case FilterMethod.None:
+                    target.localPosition = pos;
+                    target.localRotation = rot;
+                    return;
+                case FilterMethod.Lerp:
+                    //Handled below
+                    target.localPosition = Vector3.Lerp(target.localPosition, pos, Time.deltaTime * speed);
+                    target.localRotation = Quaternion.Lerp(target.localRotation, rot, Time.deltaTime * speed);
+                    break;
+                case FilterMethod.Kalman:
+                    target.localPosition = (isLeft ? leftPointerPositionKalmanFilter : rightPointerPositionKalmanFilter).Update(pos);
+                    target.localRotation = (isLeft ? leftPointerQuaternionKalmanFilter : rightPointerQuaternionKalmanFilter).Update(rot);
+                    return;
+                case FilterMethod.KalmanQueue:
+                    //Kalman queue filtering not implemented for pointer yet
+                    Debug.Log("Kalman queue filtering not implemented for pointer yet");
+                    return;
+                case FilterMethod.OneEuro:
+                    target.localPosition = (isLeft ? leftPointerOneEuroFilter : rightPointerOneEuroFilter).Update(pos);
+                    target.localRotation = (isLeft ? leftPointerRotationOneEuroFilter : rightPointerRotationOneEuroFilter).Update(rot);
+                    return;
+            }
         }
 
         /// <summary>
@@ -346,14 +494,14 @@ namespace NSYNK.HyperSlides.Network
 
             if (handProcessor != null)
             {
-                handProcessor.leftHandSmoothingFactor = RuntimeHandler.Settings.handSmoothing;
-                handProcessor.rightHandSmoothingFactor = RuntimeHandler.Settings.handSmoothing;
+                handProcessor.leftHandSmoothingFactor = HyperSlidesStateManager.Instance.Settings.handSmoothing;
+                handProcessor.rightHandSmoothingFactor = HyperSlidesStateManager.Instance.Settings.handSmoothing;
             }
         }
 
         void OnUpdatedHands(XRHandSubsystem subsystem,
-        XRHandSubsystem.UpdateSuccessFlags updateSuccessFlags,
-        XRHandSubsystem.UpdateType updateType)
+                            XRHandSubsystem.UpdateSuccessFlags updateSuccessFlags,
+                            XRHandSubsystem.UpdateType updateType)
         {
             switch (updateType)
             {
@@ -381,39 +529,17 @@ namespace NSYNK.HyperSlides.Network
         {
             //Debug.Log("Destroy player dependencies: " + UserId, this);
 
-            if(xrPointerLeft)
+            if (xrPointerLeft)
                 Destroy(xrPointerLeft.gameObject);
 
-            if(xrPointerRight)
+            if (xrPointerRight)
                 Destroy(xrPointerRight.gameObject);
 
-            if(xrHandLeft)
+            if (xrHandLeft)
                 Destroy(xrHandLeft.gameObject);
 
-            if(xrHandRight)
+            if (xrHandRight)
                 Destroy(xrHandRight.gameObject);
-        }
-
-        private void OnDestroy()
-        {
-            //Debug.Log("Destroy player: " + UserId, this);
-        }
-
-        public void OnEditMode()
-        {
-            if (!head)
-                return;
-
-            if (RuntimeHandler.Settings.editModeAvatarPrefab)
-            {
-                if (RuntimeHandler.editModeEnabled && head.childCount == 0)
-                    Instantiate(RuntimeHandler.Settings.editModeAvatarPrefab, head, false);
-                else if (!RuntimeHandler.editModeEnabled)
-                {
-                    foreach (Transform child in head)
-                        Destroy(child.gameObject);
-                }
-            }
         }
     }
 }

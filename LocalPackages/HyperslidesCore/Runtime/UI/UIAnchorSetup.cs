@@ -56,34 +56,34 @@ namespace NSYNK.HyperSlides.UI
             switch (setupState)
             {
                 case SetupState.WorldMapping:
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
                     await XRWorldMapManager.LoadWorldMapAsync();
 
-                    await HyperSlidesStateManager.UpdateStateWithBool("Checking for worldmap support", XRWorldMapManager.Instance.WorldmapSupported);
-                    await HyperSlidesStateManager.UpdateStateWithBool("Please scan the surroundings, your markers are going to be placed at", XRWorldMapManager.Instance.WorldmapMapped);
+                    await HyperSlidesStateManager.Instance.UpdateStateWithBool("Checking for worldmap support", XRWorldMapManager.Instance.WorldmapSupported);
+                    await HyperSlidesStateManager.Instance.UpdateStateWithBool("Please scan the surroundings, your markers are going to be placed at", XRWorldMapManager.Instance.WorldmapMapped);
 
                     await XRWorldMapManager.SaveWorldMapAsync();
 
-                    await HyperSlidesStateManager.UpdateStateWithDelay("Worldmap saved");
+                    await HyperSlidesStateManager.Instance.UpdateStateWithDelay("Worldmap saved");
                     await UpdateState(SetupState.Searching);
 #endif
                     break;
                 case SetupState.Searching:
-                    await HyperSlidesStateManager.UpdateStateWithDelay("Searching for spatial markers", RuntimeHandler.Settings.findWorldmapTimeout);
+                    await HyperSlidesStateManager.Instance.UpdateStateWithDelay("Searching for spatial markers", HyperSlidesStateManager.Instance.Settings.findWorldmapTimeout);
 
                     if (XRAnchorManager.IsTracking())
-                        await HyperSlidesStateManager.UpdateStateWithDelay("Spatial markers found");
+                        await HyperSlidesStateManager.Instance.UpdateStateWithDelay("Spatial markers found");
                     else
                         await UpdateState(SetupState.ImageTrackingPosition);
                     break;
                 case SetupState.ImageTrackingPosition:
-                    await HyperSlidesStateManager.UpdateStateWithBool("Please scan the position marker", XRAnchorManager.Instance.positionAnchor.IsTracking);
+                    await HyperSlidesStateManager.Instance.UpdateStateWithBool("Please scan the position marker", XRAnchorManager.Instance.positionAnchor.IsTracking);
 
                     if (XRAnchorManager.Instance.positionAnchor.IsTracking())
                     {
                         await Debug.LogQueue("Position anchor is tracking");
 
-                        if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors)
+                        if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors)
                             await UpdateState(SetupState.ImageTrackingRotation);
                         else
                             await UpdateState(SetupState.AnchorTracking);
@@ -93,7 +93,7 @@ namespace NSYNK.HyperSlides.UI
 
                     break;
                 case SetupState.ImageTrackingRotation:
-                    await HyperSlidesStateManager.UpdateStateWithBool("Please scan the rotation marker", XRAnchorManager.Instance.rotationAnchor.IsTracking);
+                    await HyperSlidesStateManager.Instance.UpdateStateWithBool("Please scan the rotation marker", XRAnchorManager.Instance.rotationAnchor.IsTracking);
 
                     if (XRAnchorManager.Instance.rotationAnchor.IsTracking())
                     {
@@ -112,17 +112,9 @@ namespace NSYNK.HyperSlides.UI
                     if (!XRAnchorManager.Instance.rotationAnchor.IsTracking())
                         await UpdateState(SetupState.ImageTrackingRotation);
 
-                    await HyperSlidesStateManager.UpdateStateWithDelay("Spatial surrounding set up");
+                    await HyperSlidesStateManager.Instance.UpdateStateWithDelay("Spatial surrounding set up");
                     break;
             }
-        }
-
-
-        public void Skip() 
-        {
-            Debug.Log("Skipping Anchor Setup");
-            RuntimeHandler.Settings.trackingType = Settings.TrackingType.Free;
-            XRAnchorManager.Instance.StartOverAnchorSetup();
         }
 
         [Serializable]

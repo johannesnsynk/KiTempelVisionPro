@@ -25,6 +25,17 @@ namespace NSYNK.HyperSlides.Network
             Value = 1
         }
 
+        public enum FilterMethod
+        {
+            None = 0,
+            Lerp = 1,
+            Kalman = 2,
+            KalmanQueue = 3,
+            OneEuro = 4
+        }
+
+        public FilterMethod filterMethod = FilterMethod.Kalman;
+
         /// <summary>
         /// Unique identifier for the network synced component.
         /// </summary>
@@ -46,10 +57,12 @@ namespace NSYNK.HyperSlides.Network
         /// The synced transform that is used to synchronize the state of the component over the network.
         /// </summary>
         public XRNetworkObjects.NetworkSyncedTransform syncedTransform;
+        public XRNetworkObjects.NetworkSyncedTransform tempSyncedTransform;
         /// <summary>
         /// The synced value that is used to synchronize the state of the component over the network.
         /// </summary>
         public XRNetworkObjects.NetworkSyncedValue syncedValue;
+        public XRNetworkObjects.NetworkSyncedValue tempSyncedValue;
         /// <summary>
         /// Event that is triggered when the synced transform is updated over the network.
         /// </summary>
@@ -91,6 +104,18 @@ namespace NSYNK.HyperSlides.Network
         /// Kalman filter used to smooth the scale updates over time.
         /// </summary>
         private KalmanFilter scaleKalmanFilter = new KalmanFilter(0.1f, 0.1f, Vector3.one, Vector3.one);
+        /// <summary>
+        /// One Euro filter used to smooth the position updates over time.
+        /// </summary>
+        private OneEuroFilter positionOneEuroFilter = new OneEuroFilter(60f, 1.0f, 0.0f, 1.0f);
+        /// <summary>
+        /// One Euro filter used to smooth the rotation updates over time.
+        /// </summary>
+        private OneEuroFilterQuaternion rotationOneEuroFilter = new OneEuroFilterQuaternion(60f, 1.0f, 0.0f, 1.0f);
+        /// <summary>
+        /// One Euro filter used to smooth the scale updates over time.
+        /// </summary>
+        private OneEuroFilter scaleOneEuroFilter = new OneEuroFilter(60f, 1.0f, 0.0f, 1.0f);
 
         /// <summary>
         /// Transform type to be saved in the transformBuffer
@@ -117,13 +142,13 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         public virtual void OnEnable()
         {
-            XRNetworkManager.onUserConnected += ToggleInteraction;
-            XRNetworkManager.onMatchJoined += ToggleInteraction;
+            XRNetworkManager.Instance.OnUserConnected += ToggleInteraction;
+            XRNetworkManager.Instance.OnMatchJoined += ToggleInteraction;
 
             if (syncType == SyncType.Transform)
-                XRNetworkManager.onNetworkTransformUpdate += NetworkUpdateTransform;
+                XRNetworkManager.Instance.OnNetworkTransformUpdate += NetworkUpdateTransform;
             if (syncType == SyncType.Value)
-                XRNetworkManager.onNetworkdValueUpdate += NetworkUpdateValue;
+                XRNetworkManager.Instance.OnNetworkValueUpdate += NetworkUpdateValue;
 
             firstTimeCall = true;
             RegisterToComponentCallbacks(true);
@@ -135,13 +160,16 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         public virtual void OnDisable()
         {
-            XRNetworkManager.onUserConnected -= ToggleInteraction;
-            XRNetworkManager.onMatchJoined -= ToggleInteraction;
+            if (XRNetworkManager.Instance == null)
+                return;
+
+            XRNetworkManager.Instance.OnUserConnected -= ToggleInteraction;
+            XRNetworkManager.Instance.OnMatchJoined -= ToggleInteraction;
 
             if (syncType == SyncType.Transform)
-                XRNetworkManager.onNetworkTransformUpdate -= NetworkUpdateTransform;
+                XRNetworkManager.Instance.OnNetworkTransformUpdate -= NetworkUpdateTransform;
             if (syncType == SyncType.Value)
-                XRNetworkManager.onNetworkdValueUpdate -= NetworkUpdateValue;
+                XRNetworkManager.Instance.OnNetworkValueUpdate -= NetworkUpdateValue;
 
             RegisterToComponentCallbacks(false);
         }
@@ -154,19 +182,25 @@ namespace NSYNK.HyperSlides.Network
         {
             if (syncedComponent)
             {
-                switch (syncedComponent.GetType().ToString())
+                switch (syncedComponent)
                 {
-                    case "UnityEngine.UI.Slider":
+                    case UnityEngine.UI.Slider slider:
                         if (register)
-                            ((UnityEngine.UI.Slider)syncedComponent).onValueChanged.AddListener(UpdateValue);
+                            slider.onValueChanged.AddListener(UpdateValue);
                         else
-                            ((UnityEngine.UI.Slider)syncedComponent).onValueChanged.RemoveListener(UpdateValue);
+                            slider.onValueChanged.RemoveListener(UpdateValue);
                         break;
-                    case "NSYNK.HyperSlides.UI.XRUISlider":
+                    case UI.XRUISlider xrUiSlider:
                         if (register)
-                            ((UI.XRUISlider)syncedComponent).onValueChanged.AddListener(UpdateValue);
+                        {
+                            xrUiSlider.onValueChanged.AddListener(UpdateValue);
+                            xrUiSlider.onTouchPhaseChanged.AddListener(UpdateValue);
+                        }
                         else
-                            ((UI.XRUISlider)syncedComponent).onValueChanged.RemoveListener(UpdateValue);
+                        {
+                            xrUiSlider.onValueChanged.RemoveListener(UpdateValue);
+                            xrUiSlider.onTouchPhaseChanged.RemoveListener(UpdateValue);
+                        }
                         break;
                 }
             }
@@ -194,16 +228,31 @@ namespace NSYNK.HyperSlides.Network
         {
             ToggleInteraction();
 
-            if (XRNetworkManager.localPlayer && DeviceInfo.Role >= restrictAccessTo)
+            if (XRNetworkManager.Instance.LocalPlayer && DeviceInfo.Instance.Role >= restrictAccessTo)
             {
                 if (syncedValue &&
                     !string.IsNullOrEmpty(syncedValue.owner) &&
-                    syncedValue.owner != XRNetworkManager.localPlayer.UserId)
+                    syncedValue.owner != XRNetworkManager.Instance.LocalPlayer.UserId)
                     return;
 
-                XRNetworkObjects.NetworkSyncedValue newSyncedValue = new(guid, XRNetworkManager.localPlayer.UserId, value);
-                XRNetworkManager.localPlayer.AddOrUpdateSyncedItem(newSyncedValue);
+                tempSyncedValue.state = XRNetworkObjects.NetworkSyncedValue.NetworkState.OCCUPIED;
+                tempSyncedValue.guid = guid;
+                tempSyncedValue.owner = XRNetworkManager.Instance.LocalPlayer.UserId;
+                tempSyncedValue.value = value;
+                tempSyncedValue.timeStamp = DateTime.UtcNow;
+
+                XRNetworkManager.Instance.LocalPlayer.AddOrUpdateSyncedItem(tempSyncedValue);
             }
+        }
+
+        /// <summary>
+        /// Release the value based on touch phase ended
+        /// </summary>
+        /// <param name="touchPhase">Touch phase of the input</param>
+        public void UpdateValue(UnityEngine.InputSystem.TouchPhase touchPhase)
+        {
+            if (touchPhase == UnityEngine.InputSystem.TouchPhase.Ended || touchPhase == UnityEngine.InputSystem.TouchPhase.Canceled)
+                ReleaseValue(syncedValue.value);
         }
 
         /// <summary>
@@ -218,20 +267,59 @@ namespace NSYNK.HyperSlides.Network
         {
             ToggleInteraction();
 
-            if (XRNetworkManager.localPlayer && DeviceInfo.Role >= restrictAccessTo)
+            if (XRNetworkManager.Instance.LocalPlayer && DeviceInfo.Instance.Role >= restrictAccessTo)
             {
                 if (syncedTransform &&
                     !string.IsNullOrEmpty(syncedTransform.owner) &&
-                    syncedTransform.owner != XRNetworkManager.localPlayer.UserId)
+                    syncedTransform.owner != XRNetworkManager.Instance.LocalPlayer.UserId)
                     return;
 
-                syncedTransform.guid = guid;
-                syncedTransform.owner = XRNetworkManager.localPlayer.UserId;
-                syncedTransform.localPosition = pos;
-                syncedTransform.localRotation = rot.eulerAngles;
-                syncedTransform.localScale = scale;
+                tempSyncedTransform.state = XRNetworkObjects.NetworkSyncedTransform.NetworkState.OCCUPIED;
+                tempSyncedTransform.guid = guid;
+                tempSyncedTransform.owner = XRNetworkManager.Instance.LocalPlayer.UserId;
+                tempSyncedTransform.localPosition = pos;
+                tempSyncedTransform.localRotation = rot.eulerAngles;
+                tempSyncedTransform.localScale = scale;
+                tempSyncedTransform.timeStamp = DateTime.UtcNow;
 
-                XRNetworkManager.localPlayer.AddOrUpdateSyncedItem(syncedTransform);
+                XRNetworkManager.Instance.LocalPlayer.AddOrUpdateSyncedItem(tempSyncedTransform);
+            }
+        }
+
+        /// <summary>
+        /// Release the transform so other users can interact with it
+        /// </summary>
+        public void ReleaseTransform()
+        {
+            if (XRNetworkManager.Instance.LocalPlayer)
+            {
+                if ((syncedTransform && string.IsNullOrEmpty(syncedTransform.owner)) ||
+                    syncedTransform.owner != XRNetworkManager.Instance.LocalPlayer.UserId)
+                    return;
+
+                syncedTransform.state = XRNetworkObjects.NetworkSyncedTransform.NetworkState.RELEASING;
+                syncedTransform.timeStamp = DateTime.UtcNow;
+
+                XRNetworkManager.Instance.LocalPlayer.AddOrUpdateSyncedItem(syncedTransform);
+            }
+        }
+
+        /// <summary>
+        /// Release the value so other users can interact with it
+        /// </summary>
+        public void ReleaseValue(float finalValue)
+        {
+            if (XRNetworkManager.Instance.LocalPlayer)
+            {
+                if ((syncedValue && string.IsNullOrEmpty(syncedValue.owner)) ||
+                    syncedValue.owner != XRNetworkManager.Instance.LocalPlayer.UserId)
+                    return;
+
+                syncedValue.state = XRNetworkObjects.NetworkSyncedValue.NetworkState.RELEASING;
+                syncedValue.value = finalValue;
+                syncedValue.timeStamp = DateTime.UtcNow;
+
+                XRNetworkManager.Instance.LocalPlayer.AddOrUpdateSyncedItem(syncedValue);
             }
         }
 
@@ -244,16 +332,14 @@ namespace NSYNK.HyperSlides.Network
             if (!syncedComponent)
                 return;
 
-            firstTimeCall = false;
-
-            switch (syncedComponent.GetType().ToString())
+            switch (syncedComponent)
             {
-                case "UnityEngine.UI.Slider":
-                    smoothedValue = Mathf.Lerp(((UnityEngine.UI.Slider)syncedComponent).value, syncedValue.value, Time.deltaTime * RuntimeHandler.Settings.syncedValueEasing);
-                    ((UnityEngine.UI.Slider)syncedComponent).SetValueWithoutNotify(instant ? syncedValue.value : smoothedValue);
+                case UnityEngine.UI.Slider slider:
+                    smoothedValue = Mathf.Lerp(instant ? slider.value : syncedValue.value, syncedValue.value, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedValueEasing);
+                    slider.SetValueWithoutNotify(instant ? syncedValue.value : smoothedValue);
                     break;
-                case "NSYNK.HyperSlides.UI.XRUISlider":
-                    ((UI.XRUISlider)syncedComponent).UpdateSlider(syncedValue.value);
+                case UI.XRUISlider xrUiSlider:
+                    xrUiSlider.UpdateSlider(syncedValue.value);
                     break;
             }
         }
@@ -263,13 +349,14 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         private void UpdateLocalTransform(bool instant = false)
         {
+            if (!syncedTransform)
+                return;
+
             if (instant)
             {
                 transform.SetLocalPositionAndRotation(syncedTransform.localPosition, Quaternion.Euler(syncedTransform.localRotation));
                 transform.localScale = syncedTransform.localScale;
             }
-
-            firstTimeCall = false;
 
             if (transformBuffer.Count < 2)
                 return;
@@ -282,49 +369,79 @@ namespace NSYNK.HyperSlides.Network
                 transformBuffer.Dequeue();
             }
 
-            var states = transformBuffer.ToArray();
-            if (states.Length >= 2)
+            switch (filterMethod)
             {
-                var prev = states[0];
-                var next = states[1];
-                float t = 0f;
-                double span = next.timeStamp - prev.timeStamp;
-                if (span > 0.0001)
-                    t = (float)((interpolationTime - prev.timeStamp) / span);
+                case FilterMethod.None:
+                    // No filtering, directly set the transform
+                    transform.localPosition = syncedTransform.localPosition;
+                    transform.localRotation = Quaternion.Euler(syncedTransform.localRotation);
+                    transform.localScale = syncedTransform.localScale;
+                    break;
+                case FilterMethod.Lerp:
+                    // Linear interpolation between the two closest states
+                    transform.localPosition = Vector3.Lerp(transform.localPosition, syncedTransform.localPosition, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    transform.localRotation = Quaternion.LerpUnclamped(transform.localRotation, Quaternion.Euler(syncedTransform.localRotation), Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    transform.localScale = Vector3.Lerp(transform.localScale, syncedTransform.localScale, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    break;
+                case FilterMethod.Kalman:
+                    // Kalman filter will
+                    smoothedPosition = positionKalmanFilter.Update(syncedTransform.localPosition);
+                    smoothedRotation = quaternionKalmanFilter.Update(Quaternion.Euler(syncedTransform.localRotation));
+                    smoothedScale = scaleKalmanFilter.Update(syncedTransform.localScale);
+                    transform.localPosition = Vector3.Lerp(transform.localPosition, smoothedPosition, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    transform.localRotation = Quaternion.LerpUnclamped(transform.localRotation, smoothedRotation, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    transform.localScale = Vector3.Lerp(transform.localScale, smoothedScale, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedTransformEasing);
+                    break;
+                case FilterMethod.KalmanQueue:
+                    // Kalman filter with queue will
+                    var states = transformBuffer.ToArray();
+                    if (states.Length >= 2)
+                    {
+                        var prev = states[0];
+                        var next = states[1];
+                        float t = 0f;
+                        double span = next.timeStamp - prev.timeStamp;
+                        if (span > 0.0001)
+                            t = (float)((interpolationTime - prev.timeStamp) / span);
 
-                transform.localPosition = positionKalmanFilter.Update(Vector3.Lerp(prev.position, next.position, t));
-                transform.localRotation = quaternionKalmanFilter.Update(Quaternion.LerpUnclamped(prev.rotation, next.rotation, t));
-                transform.localScale = scaleKalmanFilter.Update(Vector3.Lerp(prev.scale, next.scale, t));
+                        transform.localPosition = positionKalmanFilter.Update(Vector3.Lerp(prev.position, next.position, t));
+                        transform.localRotation = quaternionKalmanFilter.Update(Quaternion.LerpUnclamped(prev.rotation, next.rotation, t));
+                        transform.localScale = scaleKalmanFilter.Update(Vector3.Lerp(prev.scale, next.scale, t));
+                    }
+                    else if (states.Length == 1)
+                    {
+                        var lastState = transformBuffer.Last();
+                        double timeSinceLastState = DateTime.UtcNow.Subtract(DateTime.UnixEpoch).TotalSeconds - lastState.timeStamp;
+
+                        // Only extrapolate for a reasonable amount of time (e.g., 0.5 seconds)
+                        if (timeSinceLastState < 0.5f)
+                        {
+                            // Extrapolate position based on last known velocity
+                            Vector3 extrapolatedPosition = lastState.position + (lastState.velocity * (float)timeSinceLastState);
+                            transform.localPosition = positionKalmanFilter.Update(extrapolatedPosition);
+                        }
+                        else
+                        {
+                            transform.localPosition = positionKalmanFilter.Update(lastState.position);
+                        }
+
+                        transform.localRotation = quaternionKalmanFilter.Update(lastState.rotation);
+                        transform.localScale = scaleKalmanFilter.Update(lastState.scale);
+                    }
+                    break;
+                case FilterMethod.OneEuro:
+                    // One Euro filter - responsive with jitter reduction
+                    // Update filter parameters based on tickrate
+                    positionOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+                    rotationOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+                    scaleOneEuroFilter.UpdateParams(HyperSlidesStateManager.Instance.Settings.updateRate, 1.0f, 0.0f, 1.0f);
+                    
+                    // Apply One Euro filtering directly to the latest network position
+                    transform.localPosition = positionOneEuroFilter.Update(syncedTransform.localPosition);
+                    transform.localRotation = rotationOneEuroFilter.Update(Quaternion.Euler(syncedTransform.localRotation));
+                    transform.localScale = scaleOneEuroFilter.Update(syncedTransform.localScale);
+                    break;
             }
-            else if (states.Length == 1)
-            {
-                var lastState = transformBuffer.Last();
-                double timeSinceLastState = DateTime.UtcNow.Subtract(DateTime.UnixEpoch).TotalSeconds - lastState.timeStamp;
-
-                // Only extrapolate for a reasonable amount of time (e.g., 0.5 seconds)
-                if (timeSinceLastState < 0.5f)
-                {
-                    // Extrapolate position based on last known velocity
-                    Vector3 extrapolatedPosition = lastState.position + (lastState.velocity * (float)timeSinceLastState);
-                    transform.localPosition = positionKalmanFilter.Update(extrapolatedPosition);
-                }
-                else
-                {
-                    transform.localPosition = positionKalmanFilter.Update(lastState.position);
-                }
-
-                transform.localRotation = quaternionKalmanFilter.Update(lastState.rotation);
-                transform.localScale = scaleKalmanFilter.Update(lastState.scale);
-            }
-
-
-            // smoothedPosition = positionKalmanFilter.Update(syncedTransform.localPosition);
-            // smoothedRotation = quaternionKalmanFilter.Update(Quaternion.Euler(syncedTransform.localRotation));
-            // smoothedScale = scaleKalmanFilter.Update(syncedTransform.localScale);
-
-            // transform.localPosition = Vector3.Lerp(transform.localPosition, smoothedPosition, Time.deltaTime * RuntimeHandler.Settings.syncedTransformEasing);
-            // transform.localRotation = Quaternion.LerpUnclamped(transform.localRotation, smoothedRotation, Time.deltaTime * RuntimeHandler.Settings.syncedTransformEasing);
-            // transform.localScale = Vector3.Lerp(transform.localScale, smoothedScale, Time.deltaTime * RuntimeHandler.Settings.syncedTransformEasing);
         }
 
         /// <summary>
@@ -341,7 +458,10 @@ namespace NSYNK.HyperSlides.Network
                 syncedValueEvent?.Invoke(syncedValue.value);
 
                 if (firstTimeCall)
+                {
                     UpdateLocalValue(true);
+                    firstTimeCall = false;
+                }
             }
         }
 
@@ -358,6 +478,13 @@ namespace NSYNK.HyperSlides.Network
             if (networkSyncedTransform.guid == guid)
             {
                 syncedTransform = networkSyncedTransform;
+                syncedTransformEvent?.Invoke(syncedTransform);
+
+                if (firstTimeCall)
+                {
+                    UpdateLocalTransform(true);
+                    firstTimeCall = false;
+                }
 
                 Vector3 velocity = Vector3.zero;
                 if (transformBuffer.Count > 0)
@@ -382,15 +509,12 @@ namespace NSYNK.HyperSlides.Network
                 // Keep buffer site reasonable
                 while (transformBuffer.Count > 20)
                     transformBuffer.Dequeue();
-
-                if (firstTimeCall)
-                    UpdateLocalTransform(true);
             }
         }
 
         public virtual void Update()
         {
-            if (!XRNetworkManager.localPlayer)
+            if (!XRNetworkManager.Instance.LocalPlayer)
                 return;
 
             if (syncType == SyncType.Transform)
@@ -405,7 +529,10 @@ namespace NSYNK.HyperSlides.Network
         /// </summary>
         private void ToggleInteraction()
         {
-            bool allowedToInteract = XRNetworkManager.localPlayer ? DeviceInfo.Role >= restrictAccessTo : false;
+            if (!XRNetworkManager.Instance)
+                return;
+
+            bool allowedToInteract = XRNetworkManager.Instance.LocalPlayer ? DeviceInfo.Instance.Role >= restrictAccessTo : false;
 
             if (syncType == SyncType.Transform && TryGetComponent(out Collider col))
                 col.enabled = allowedToInteract;
@@ -413,13 +540,13 @@ namespace NSYNK.HyperSlides.Network
             if (!syncedComponent)
                 return;
 
-            switch (syncedComponent.GetType().ToString())
+            switch (syncedComponent)
             {
-                case "UnityEngine.UI.Slider":
-                    ((UnityEngine.UI.Slider)syncedComponent).interactable = allowedToInteract;
+                case UnityEngine.UI.Slider slider:
+                    slider.interactable = allowedToInteract;
                     break;
-                case "NSYNK.HyperSlides.UI.XRUISlider":
-                    ((UI.XRUISlider)syncedComponent).interactable = allowedToInteract;
+                case UI.XRUISlider xrUiSlider:
+                    xrUiSlider.interactable = allowedToInteract;
                     break;
             }
         }

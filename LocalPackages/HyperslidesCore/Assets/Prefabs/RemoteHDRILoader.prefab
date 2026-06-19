@@ -9,7 +9,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8406155002915258594}
-  - component: {fileID: 3287775075858608588}
   - component: {fileID: 2899544446556893626}
   - component: {fileID: 7116785035247651533}
   m_Layer: 0
@@ -34,25 +33,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3287775075858608588
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5400806448184957426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b5c7697e8e37b44659f3daa868849872, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  serverURL: https://minio.nsynk.de/hyperslides/assets
-  presentationAssetPairs:
-  - projectName: Porsche992
-    catalogName: catalog_0.1.0.bin
-    assetKey: WeltpremiereHDRI
-  loadedTextures: []
-  fakeOffline: 1
 --- !u!215 &2899544446556893626
 ReflectionProbe:
   m_ObjectHideFlags: 0
@@ -98,8 +78,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 99441c499ce99459ca21d7b575786f0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  assetLoader: {fileID: 3287775075858608588}
   reflectionProbe: {fileID: 2899544446556893626}
   autoLoadOnEnable: 1
+  restorePreviousSkybox: 1
   DefaultSkyboxMaterial: {fileID: 2100000, guid: 1968b4d25538a4950a77086b6aef5a48,
     type: 2}

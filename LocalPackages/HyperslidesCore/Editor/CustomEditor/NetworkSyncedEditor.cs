@@ -6,10 +6,10 @@ namespace NSYNK.HyperSlides.EditorScripts
     /// <summary>
     /// This class is used to create a custom editor for the NetworkSynced class.
     /// </summary>
-    [CustomEditor(typeof(NetworkSynced), true)]
+    [CustomEditor(typeof(NetworkSynced), true), CanEditMultipleObjects]
     public class NetworkSyncedEditor : Editor
     {
-        SerializedProperty guid, grabbedObject, lookAtUserPosition, restrictAccessTo, syncType, syncedComponent, syncedValueEvent, syncedTransformEvent;
+        SerializedProperty guid, grabbedObject, lookAtUserPosition, restrictAccessTo, syncType, syncedComponent, syncedValueEvent, syncedTransformEvent, filterMethod;
 
         protected void OnEnable()
         {
@@ -18,6 +18,7 @@ namespace NSYNK.HyperSlides.EditorScripts
             lookAtUserPosition = serializedObject.FindProperty("lookAtUserPosition");
             restrictAccessTo = serializedObject.FindProperty("restrictAccessTo");
             syncType = serializedObject.FindProperty("syncType");
+            filterMethod = serializedObject.FindProperty("filterMethod");
             syncedComponent = serializedObject.FindProperty("syncedComponent");
             syncedValueEvent = serializedObject.FindProperty("syncedValueEvent");
             syncedTransformEvent = serializedObject.FindProperty("syncedTransformEvent");
@@ -25,6 +26,8 @@ namespace NSYNK.HyperSlides.EditorScripts
 
         public override void OnInspectorGUI()
         {
+            // DrawDefaultInspector();
+            
             NetworkSynced sync = target as NetworkSynced;
 
             serializedObject.Update();
@@ -39,6 +42,7 @@ namespace NSYNK.HyperSlides.EditorScripts
                 
             EditorGUILayout.PropertyField(restrictAccessTo);
             EditorGUILayout.PropertyField(syncType);
+            EditorGUILayout.PropertyField(filterMethod);
 
             if (sync.syncType == NetworkSynced.SyncType.Value)
             {

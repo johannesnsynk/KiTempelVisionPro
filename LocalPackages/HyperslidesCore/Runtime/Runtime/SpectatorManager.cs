@@ -1,45 +1,46 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using NSYNK.HyperSlides.Network;
-using NSYNK.HyperSlides.Runtime;
 
-public class SpectatorManager : MonoBehaviour
+namespace NSYNK.HyperSlides.Runtime
 {
-    public GameObject SpectatorEnvironment;
-
-    private GameObject spectatorEnvironmentRuntime;
-
-    public List<GameObject> gameObjectsToHide;
-
-    void OnEnable() => XRNetworkManager.onUserConnected += CheckUserRole;
-    void OnDisable() => XRNetworkManager.onUserConnected -= CheckUserRole;
-
-    void Start()
+    /// <summary>
+    /// Manages the spectator environment for simulation role users.
+    /// </summary>
+    public class SpectatorManager : Singleton<SpectatorManager>
     {
-        CheckUserRole();
-    }
+        public GameObject SpectatorEnvironment;
+        public List<GameObject> gameObjectsToHide;
 
-    void CheckUserRole() 
-    {
-        if (DeviceInfo.Role == XRPlayer.Role.Simulation)
+        private GameObject spectatorEnvironmentRuntime;
+
+        private void OnEnable() => XRNetworkManager.Instance.OnUserConnected += CheckUserRole;
+        private void OnDisable()
         {
-            if (spectatorEnvironmentRuntime == null)
-                spectatorEnvironmentRuntime = Instantiate(SpectatorEnvironment, new Vector3(0.0f, 0.0f, 0.0f), Quaternion.identity);
-
-            foreach (GameObject gO in gameObjectsToHide) 
-            {
-                gO.SetActive(false);
-            }
+            if (XRNetworkManager.Instance != null)
+                XRNetworkManager.Instance.OnUserConnected -= CheckUserRole;
         }
-        else
-        {
-            if (spectatorEnvironmentRuntime != null)
-                Destroy(spectatorEnvironmentRuntime);
+        
+        private void Start() => CheckUserRole();
 
-            foreach (GameObject gO in gameObjectsToHide) 
+        /// <summary>
+        /// Checks the user's role and manages the spectator environment accordingly.
+        /// </summary>
+        private void CheckUserRole()
+        {
+            if (DeviceInfo.Instance.Role == XRPlayer.Role.Simulation)
             {
-                gO.SetActive(true);
+                if (spectatorEnvironmentRuntime == null)
+                    spectatorEnvironmentRuntime = Instantiate(SpectatorEnvironment, new Vector3(0.0f, 0.0f, 0.0f), Quaternion.identity);
+
+                gameObjectsToHide.ForEach(go => go.SetActive(false));
+            }
+            else
+            {
+                if (spectatorEnvironmentRuntime != null)
+                    Destroy(spectatorEnvironmentRuntime);
+
+                gameObjectsToHide.ForEach(go => go.SetActive(true));
             }
         }
     }

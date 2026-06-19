@@ -1,4 +1,7 @@
 using Newtonsoft.Json.Linq;
+using NSYNK.HyperSlides.Network;
+using NSYNK.HyperSlides.Runtime;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -11,34 +14,45 @@ namespace NSYNK.HyperSlides.Core
     /// </summary>
     public class XRDataManager : Singleton<XRDataManager>
     {
-#if UNITY_EDITOR
-        public List<XRPresentation> inspectorPresentations;
-#endif
-
-        public delegate void DataReceived();
-
-        public static List<XRPresentation> allPresentations = new List<XRPresentation>();
-        public static DataReceived onDataReceived;
+        public List<XRPresentation> AllPresentations = new();
+        public event Action OnDataReceived;
 
         /// <summary>
         /// Convert the string response to a jobject and presentation array
         /// </summary>
         /// <param name="response"></param>
-        public void HandleJsonResponse(string response)
+        public List<T> HandleJsonResponse<T>(string response)
         {
             string jsonResponse = response;
 
             JObject parsedJson = JObject.Parse(jsonResponse);
 
-            if (parsedJson["data"] == null)
-                return;
-
-            //Check for presentations being an object or array
-            if (parsedJson["data"].Type == JTokenType.Array)
+            //Check for session transforms being an object or array
+            if (parsedJson["data"] != null)
             {
-                XRJsonArray presentations = parsedJson.ToObject<XRJsonArray>();
-                allPresentations = presentations.data;
+                if (parsedJson["data"].Type == JTokenType.Array)
+                {
+                    XRJsonArray<T> dataArray = parsedJson.ToObject<XRJsonArray<T>>();
+
+                    if (typeof(T) == typeof(XRPresentation))
+                        AllPresentations = dataArray.data as List<XRPresentation>;
+
+                    return dataArray.data;
+                }
+                else
+                {
+                    XRJson<T> dataObject = parsedJson.ToObject<XRJson<T>>();
+
+                    if (typeof(T) == typeof(XRPresentation))
+                        AllPresentations = new List<XRPresentation> { dataObject.data as XRPresentation };
+
+                    return new List<T> { dataObject.data };
+                }
             }
+            else
+                Debug.LogWarning("JSON response does not contain 'data' field: " + jsonResponse, Instance);
+
+            return new List<T>();
         }
 
         /// <summary>
@@ -52,14 +66,14 @@ namespace NSYNK.HyperSlides.Core
             TextAsset targetFile = Resources.Load<TextAsset>("SampleData");
 
             if (targetFile)
-                HandleJsonResponse(targetFile.text);
+                HandleJsonResponse<XRPresentation>(targetFile.text);
             else
             {
                 Debug.LogWarning("Could not load local backup file!");
                 return;
             }
 
-            onDataReceived?.Invoke();
+            OnDataReceived?.Invoke();
         }
     }
 }

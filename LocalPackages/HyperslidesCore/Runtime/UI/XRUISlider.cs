@@ -17,40 +17,50 @@ namespace NSYNK.HyperSlides.UI
 
         [HideInInspector]
         public UnityEvent<float> onValueChanged;
+        [HideInInspector]
+        public UnityEvent<UnityEngine.InputSystem.TouchPhase> onTouchPhaseChanged;
 
         [SerializeField]
         private MeshRenderer fillRenderer;
         [SerializeField]
         private TMPro.TextMeshPro valueLabel;
         private float boxColliderSizeX;
-        private float newValue, oldValue;
+        protected float newValue, oldValue;
         private bool animating = false;
         private bool interacting = false;
 
-        private void Start()
+        protected void Start()
         {
             boxColliderSizeX = GetComponent<BoxCollider>().size.x;
         }
 
-        private void OnEnable()
+        protected void OnEnable()
         {
-            XRInputManager.onTouchUpdate += HandleTouchSlider;
+            if (XRInputManager.Instance != null)
+                XRInputManager.Instance.OnTouchUpdate += HandleTouchSlider;
+        }
+        protected void OnDisable()
+        {
+            if (XRInputManager.Instance != null)
+                XRInputManager.Instance.OnTouchUpdate -= HandleTouchSlider;
         }
 
-        private void OnDisable() => XRInputManager.onTouchUpdate -= HandleTouchSlider;
-
-        private void HandleTouchSlider(UnityEngine.InputSystem.TouchPhase touchPhase)
+        protected void HandleTouchSlider(UnityEngine.InputSystem.TouchPhase touchPhase)
         {
             if (!interactable || animating)
                 return;
 
-            if (XRInputManager.Instance.m_SelectedObject == gameObject)
+            if (XRInputManager.Instance.selectedObject == gameObject)
             {
                 interacting = true;
-                Press(XRInputManager.interactionPosition);
+                Press(XRInputManager.Instance.InteractionPosition);
+                onTouchPhaseChanged?.Invoke(touchPhase);
             }
             else
+            {
                 interacting = false;
+                onTouchPhaseChanged?.Invoke(touchPhase);
+            }
         }
 
         public void AnimateSlider(float start, float finish, float duration)
@@ -105,21 +115,21 @@ namespace NSYNK.HyperSlides.UI
         /// <summary>
         /// Update the textmesh textlabel
         /// </summary>
-        private void UpdateValueLabel()
+        protected void UpdateValueLabel()
         {
             if (valueLabel)
             {
                 valueLabel.gameObject.SetActive(showValueLabel);
 
-                if(showValueLabel)
+                if (showValueLabel)
                     valueLabel.text = value.ToString("F2");
             }
         }
 
-        private void Update()
+        protected void Update()
         {
             newValue = Mathf.Clamp01(newValue);
-            value = Mathf.Lerp(oldValue, newValue, Time.deltaTime * RuntimeHandler.Settings.syncedValueEasing);
+            value = Mathf.Lerp(oldValue, newValue, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.syncedValueEasing);
 
             fillRenderer.material.SetFloat("_Percentage", 1 - Mathf.Clamp(value, 0.0f, 1.0f));
 

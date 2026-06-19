@@ -1,5 +1,6 @@
 using System;
 using NSYNK.HyperSlides.Network;
+using NSYNK.HyperSlides.Runtime;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -8,27 +9,15 @@ namespace NSYNK.HyperSlides
     [CreateAssetMenu(fileName = "GlobalSettings", menuName = "Hyperslides/Global Setting", order = 0)]
     public class Settings : ScriptableObject
     {
-        public string backend = "https://next.hyperslides.de";
         public enum TrackingType { Free, Anchors, Image };
+
         public bool showNameTags = false;
-
-        [Header("Nakama Connection")]
-        public NakamaConnectionProfile NakamaProfile = new();
-
-        [Serializable]
-        public class NakamaConnectionProfile
-        {
-            public string IP = "nakama.hyperslides.de";
-            public int Port = 443;
-            public bool SSL = true;
-            public string Protocol => SSL ? "https" : "http";
-            public string ServerKey = "ooRB3B*7prh-dAD8Qnz*.UzTY";
-        }
 
         [Header("Nakama Session Config")]
         public float updateRate = 5;
         public float backupUpdateRate = 5;
         public float slowUpdateRate = 0.001f;
+        public float socketCheckRate = 1;
 
         [Header("Local Player")]
         public float handSmoothing = 5;
@@ -36,10 +25,7 @@ namespace NSYNK.HyperSlides
         public float playerRotationEasing = 5;
         public float playerHeadRotationEasing = 5;
         public XRPlayer.Role avatarVisibilityRole = XRPlayer.Role.Moderator;
-        [FormerlySerializedAs("playerHeadPrefab")]
         public GameObject avatarPrefab;
-        [FormerlySerializedAs("editModePlayerPrefab")]
-        public GameObject editModeAvatarPrefab;
 
         [Header("Moderator Pointer")]
         public bool ShowModeratorPointer = true;
@@ -69,12 +55,14 @@ namespace NSYNK.HyperSlides
 
         [Header("AR Setup")]
         public float findWorldmapTimeout = 3;
-        public bool showPersonaMarkersOnLobby = true;
+        public bool showMarkerVisualsOnLobby = true;
         [SerializeField]
         private TrackingType handheldTrackingType = TrackingType.Image;
         public TrackingType HandheldTrackingType => handheldTrackingType;
+#if !UNITY_IOS
         [SerializeField]
         private TrackingType xrTrackingType = TrackingType.Anchors;
+#endif
         public TrackingType trackingType
         {
 #if UNITY_IOS
@@ -85,5 +73,10 @@ namespace NSYNK.HyperSlides
             set { xrTrackingType = value; }
 #endif
         }
+
+        [Header("Prefabs")]
+        public GameObject LocalPlayerPrefab;
+        public GameObject PlayerPrefab;
+        public GameObject PlacementIndicatorPrefab;
     }
 }

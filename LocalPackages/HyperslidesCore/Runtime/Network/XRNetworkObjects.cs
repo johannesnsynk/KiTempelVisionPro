@@ -1,9 +1,11 @@
-﻿using Nakama;
+﻿using MessagePack;
+using Nakama;
 
 using System;
 using System.Collections.Generic;
 
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.XR.Hands;
 
 namespace NSYNK.HyperSlides.Network
@@ -18,7 +20,6 @@ namespace NSYNK.HyperSlides.Network
         /// The network player data, that is going to be sent to other clients
         /// </summary>
         public static XRPlayer networkPlayer = new XRPlayer();
-        public static XRModerator networkModerator = new XRModerator();
         public static XRPlayers networkPlayers = new XRPlayers();
         /// <summary>
         /// The network current slide data to update all clients to the same presentation and id
@@ -57,52 +58,128 @@ namespace NSYNK.HyperSlides.Network
         }
 
         [Serializable]
+        public class UDPLogging
+        {
+            public UDPLogging(string timeStamp, MatchUpdate.MessageType status)
+            {
+                readableTimeStamp = timeStamp;
+                Status = status;
+            }
+
+            public string readableTimeStamp = DateTime.UtcNow.ToString("o");
+            public MatchUpdate.MessageType Status = MatchUpdate.MessageType.PLAYER_UPDATE;
+        }
+
+        [MessagePackObject]
+        [Union(0, typeof(XRPlayer))]
+        [Union(1, typeof(MatchState))]
+        [Union(2, typeof(ConnectionCheck))]
+        [Union(3, typeof(PlayerStates))]
+        public abstract class UpdateData
+        {
+        }
+
+        [Serializable, MessagePackObject]
+        public class ConnectionCheck : UpdateData
+        {
+        }
+
+        [Serializable, MessagePackObject]
+        public class MatchUpdate
+        {
+            public enum MessageType
+            {
+                CONNECTION_CHECK,
+                PLAYER_UPDATE,
+                MATCH_UPDATE
+            }
+
+            [Key(0)]
+            public MessageType Status = MessageType.PLAYER_UPDATE;
+            [Key(1)]
+            public UpdateData Data;
+        }
+
+        [Serializable, MessagePackObject]
+        public class MatchState : UpdateData
+        {
+            [Key(0)]
+            public DateTime timeStamp = DateTime.UtcNow;
+            [Key(1)]
+            public int SlideIndex = 0;
+            [Key(2)]
+            public NetworkSyncedTransform[] syncedTransforms = new NetworkSyncedTransform[0];
+            [Key(3)]
+            public NetworkSyncedValue[] syncedValues = new NetworkSyncedValue[0];
+        }
+
+        [Serializable, MessagePackObject]
+        public class PlayerStates : UpdateData
+        {
+            [Key(0)]
+            public DateTime timeStamp = DateTime.UtcNow;
+            [Key(1)]
+            public XRPlayer[] playerStates = new XRPlayer[0];
+        }
+
+        [Serializable, MessagePackObject]
+        public class XRPlayer : UpdateData
+        {
+            public enum MessageType
+            {
+                JOIN,
+                UPDATE,
+                LEAVE
+            }
+
+            [Key(0)]
+            public DateTime timeStamp = DateTime.UtcNow;
+            [Key(1)]
+            public string Username = "DefaultUser";
+            [Key(2)]
+            public string UserId = "DefaultUserId";
+            [Key(3)]
+            public string role = "Participant";
+            [Key(4)]
+            public string deviceType = "DebugUser";
+            [Key(5)]
+            public SerializedVector position = new(Vector3.one);
+            [Key(6)]
+            public SerializedVector rotation = new(Vector3.one);
+            [Key(7)]
+            public XRPointer LeftPointer = new();
+            [Key(8)]
+            public XRPointer RightPointer = new();
+            [Key(9)]
+            public MessageType Status = MessageType.UPDATE;
+            [IgnoreMember]
+            public NetworkSyncedTransform[] syncedTransforms = new NetworkSyncedTransform[0];
+            [IgnoreMember]
+            public NetworkSyncedValue[] syncedValues = new NetworkSyncedValue[0];
+        }
+
+        [Serializable, MessagePackObject]
         public class XRPointer
         {
-            public string UserId;
-            public Handedness handedness;
+            [Key(0)]
+            public string UserId = "DefaultUserId";
+            [Key(1)]
+            public string handedness = "";
+            [Key(2)]
             public SerializedVector position = new(Vector3.one);
+            [Key(3)]
             public SerializedVector rotation = new(Vector3.one);
+            [Key(4)]
             public bool visible;
 
             public XRPointer() { }
             public XRPointer(string u, Handedness h, GameObject g)
             {
                 UserId = u;
-                handedness = h;
+                handedness = h.ToString();
                 position = g.transform.localPosition;
                 rotation = g.transform.localRotation.eulerAngles;
                 visible = g.activeInHierarchy;
-            }
-        }
-
-        [Serializable]
-        public class XRPlayer
-        {
-            public DateTime timeStamp;
-            public string UserId;
-            public string role;
-            public SerializedVector position = new(Vector3.one);
-            public SerializedVector rotation = new(Vector3.one);
-            public List<NetworkSyncedTransform> syncedTransforms = new();
-            public List<NetworkSyncedValue> syncedValues = new();            
-        }
-
-        [Serializable]
-        public class XRModerator : XRPlayer
-        {
-            public XRPointer leftPointer;
-            public XRPointer rightPointer;
-
-            public void CopyValues(XRPlayer player)
-            {
-                UserId = player.UserId;
-                timeStamp = player.timeStamp;
-                role = player.role;
-                position = player.position;
-                rotation = player.rotation;
-                syncedTransforms = player.syncedTransforms;
-                syncedValues = player.syncedValues;
             }
         }
 
@@ -159,7 +236,8 @@ namespace NSYNK.HyperSlides.Network
         }
 
         [Serializable]
-        public class SessionTransformOverride{
+        public class SessionTransformOverride
+        {
             public string guid;
             public SerializedVector localPosition = Vector3.one;
             public SerializedVector localRotation = Vector3.one;
@@ -174,12 +252,25 @@ namespace NSYNK.HyperSlides.Network
             }
         }
 
-        [Serializable]
+        [Serializable, MessagePackObject]
         public class NetworkSyncedValue
         {
+            public enum NetworkState
+            {
+                OCCUPIED,
+                RELEASING,
+                AVAILABLE
+            }
+
+            [Key(0)]
+            public NetworkState state = NetworkState.AVAILABLE;
+            [Key(1)]
             public string guid;
+            [Key(2)]
             public string owner;
+            [Key(3)]
             public float value;
+            [Key(4)]
             public DateTime timeStamp;
 
             public static implicit operator bool(NetworkSyncedValue syncedValue) => syncedValue != null;
@@ -195,21 +286,37 @@ namespace NSYNK.HyperSlides.Network
 
             public void UpdateValue(NetworkSyncedValue v)
             {
+                state = v.state;
                 owner = v.owner;
                 value = v.value;
-                timeStamp = DateTime.UtcNow;
+                timeStamp = v.timeStamp;
             }
         }
 
-        [Serializable]
+        [Serializable, MessagePackObject]
         public class NetworkSyncedTransform
         {
-            public string guid;
-            public string owner;
-            public SerializedVector localPosition = new(Vector3.one);
-            public SerializedVector localRotation = new(Vector3.one);
-            public SerializedVector localScale = Vector3.one;
-            public DateTime timeStamp;
+            public enum NetworkState
+            {
+                OCCUPIED,
+                RELEASING,
+                AVAILABLE
+            }
+
+            [Key(0)]
+            public NetworkState state = NetworkState.AVAILABLE;
+            [Key(1)]
+            public string guid = "";
+            [Key(2)]
+            public string owner = "";
+            [Key(3)]
+            public SerializedVector localPosition = new();
+            [Key(4)]
+            public SerializedVector localRotation = new();
+            [Key(5)]
+            public SerializedVector localScale = new();
+            [Key(6)]
+            public DateTime timeStamp = DateTime.UtcNow;
 
             public static implicit operator bool(NetworkSyncedTransform syncedTransform) => syncedTransform != null;
 
@@ -219,11 +326,12 @@ namespace NSYNK.HyperSlides.Network
 
             public void UpdateTransform(NetworkSyncedTransform t)
             {
+                state = t.state;
                 owner = t.owner;
                 localPosition = t.localPosition;
                 localRotation = t.localRotation;
                 localScale = t.localScale;
-                timeStamp = DateTime.UtcNow;
+                timeStamp = t.timeStamp;
             }
 
             public void UpdateTransform(string g, string o, Transform t) => UpdateTransform(g, o, t.localPosition, t.localRotation, t.localScale);
@@ -235,15 +343,17 @@ namespace NSYNK.HyperSlides.Network
                 localPosition = p;
                 localRotation = r.eulerAngles;
                 localScale = s;
-                timeStamp = DateTime.UtcNow;
             }
         }
 
-        [Serializable]
+        [Serializable, MessagePackObject]
         public class SerializedVector
         {
+            [Key(0)]
             public float x = 1;
+            [Key(1)]
             public float y = 1;
+            [Key(2)]
             public float z = 1;
 
             public static implicit operator Vector3(SerializedVector vector)

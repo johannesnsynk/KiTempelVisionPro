@@ -1,16 +1,32 @@
 using UnityEngine;
 
+/// <summary>
+/// A generic singleton base class for MonoBehaviour-derived classes.
+/// </summary>
+/// <typeparam name="T"></typeparam>
+[DefaultExecutionOrder(-1000)] // Ensure singletons initialize early
 public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour
 {
-    public static T Instance;
-
-    public virtual void Awake()
+    private static T _instance;
+    public static T Instance
     {
-        if (Instance != null)
+        get
         {
-            string typename = typeof(T).Name;
-            Debug.LogWarning($"More that one instance of {typename} found.");
+            if (_instance == null)
+                _instance = FindAnyObjectByType<T>(FindObjectsInactive.Include);
+
+            return _instance;
         }
-        Instance = this as T;
     }
+
+    protected void Awake()
+    {
+        if (_instance == null)
+            _instance = this as T;
+
+        OnSingletonAwake();
+    }
+
+    // Derived classes override this instead of Awake to add their logic.
+    protected virtual void OnSingletonAwake() { }
 }

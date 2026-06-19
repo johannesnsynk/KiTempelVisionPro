@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+	<dict>
+		<key>PreferenceSpecifiers</key>
+		<array>
+			<dict>
+				<key>Type</key>
+				<string>PSGroupSpecifier</string>
+				<key>Title</key>
+				<string>Standalone Settings</string>
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSToggleSwitchSpecifier</string>
+				<key>Title</key>
+				<string>Use Standalone Setup</string>
+				<key>Key</key>
+				<string>use_standalone_setup</string>
+				<key>DefaultValue</key>
+				<false />
+			</dict>
+			<dict>
+				<key>Type</key>
+				<string>PSTextFieldSpecifier</string>
+				<key>Title</key>
+				<string>Presentation ID</string>
+				<key>Key</key>
+				<string>standalone_presentation_id</string>
+				<key>DefaultValue</key>
+				<string></string>
+				<key>IsSecure</key>
+				<false />
+				<key>KeyboardType</key>
+				<string>Alphabet</string>
+			</dict>
+		</array>
+	</dict>
+</plist>

@@ -15,7 +15,20 @@ namespace NSYNK.HyperSlides.UI
     /// </summary>
     public class MetadataViewer : MonoBehaviour
     {
-        public enum MetaType { SlideCount, ActiveSlideName, ActiveTriggerName, NextSlideName, EasingProcess, AssetLoadingTrigger, Annotation, UserPosition, DebugLogs }
+        public enum MetaType
+        {
+            SlideCount = 0,
+            SlideActiveTime = 9,
+            NextSlideName = 3,
+            ActiveSlideName = 1,
+            ActiveTriggerName = 2,
+            ActiveSlideNameRaw = 10,
+            EasingProcess = 4,
+            AssetLoadingTrigger = 5,
+            Annotation = 6,
+            UserPosition = 7,
+            DebugLogs = 8,
+        }
         public MetaType metaType;
 
         public Object updateObject;
@@ -29,15 +42,19 @@ namespace NSYNK.HyperSlides.UI
             else if (metaType == MetaType.AssetLoadingTrigger)
             {
                 UIButton.onUpdateUI += OnUpdateUI;
-                XRSlideManager.OnAssetLoadProgressUpdate += UpdateRadialProgressSmooth;
-                XRSlideManager.OnAssetLoadStrated += UpdateRadialProgressVisibility;
+                XRSlideManager.Instance.OnAssetLoadProgressUpdate += UpdateRadialProgressSmooth;
+                XRSlideManager.Instance.OnAssetLoadStarted += UpdateRadialProgressVisibility;
+            }
+            else if (metaType == MetaType.SlideActiveTime)
+            {
+                XRSlideManager.Instance.OnSlideActiveTimeUpdate += UpdateMetadata;
             }
             else
             {
-                XRSlideManager.OnXRSlideChanged += UpdateMetadata;
-                XRSlideManager.OnXRTriggerChanged += UpdateMetadata;
-                XRSlideManager.OnDissolveInProgressNormalized += UpdateMetadata;
-                XRSlideManager.OnDissolveOutProgressNormalized += UpdateMetadataReversed;
+                XRSlideManager.Instance.OnXRSlideChanged += UpdateMetadata;
+                XRSlideManager.Instance.OnXRTriggerChanged += UpdateMetadata;
+                XRSlideManager.Instance.OnDissolveInProgressNormalized += UpdateMetadata;
+                XRSlideManager.Instance.OnDissolveOutProgressNormalized += UpdateMetadataReversed;
                 UpdateMetadata(null, null);
             }
         }
@@ -46,41 +63,48 @@ namespace NSYNK.HyperSlides.UI
         {
             Dispatcher.Enqueue(() =>
             {
-                bool interactable = !XRUIManager.TimerRunning() && !XRUIManager.Instance.LoadingActionInProgress;
+                bool interactable = !XRUIManager.TimerRunning() && !XRSlideManager.LoadingActionInProgress;
                 // if (!interactable)
                 // {
-                    switch (updateObject.GetType().ToString())
-                    {
-                        case "UnityEngine.UI.Mask":
-                            ((UnityEngine.UI.Mask)updateObject).enabled = !interactable;
-                            break;
-                        case "UnityEngine.UI.Image":
-                            UnityEngine.UI.Image imageToUpdate = (UnityEngine.UI.Image)updateObject;
-                            imageToUpdate.enabled = !interactable;
-                            if(interactable)
-                                imageToUpdate.fillAmount = 0;
-                            break;
-                    // }
+                switch (updateObject.GetType().ToString())
+                {
+                    case "UnityEngine.UI.Mask":
+                        ((UnityEngine.UI.Mask)updateObject).enabled = !interactable;
+                        break;
+                    case "UnityEngine.UI.Image":
+                        UnityEngine.UI.Image imageToUpdate = (UnityEngine.UI.Image)updateObject;
+                        imageToUpdate.enabled = !interactable;
+                        if (interactable)
+                            imageToUpdate.fillAmount = 0;
+                        break;
+                        // }
                 }
             });
         }
 
         private void OnDisable()
         {
+            if (XRSlideManager.Instance == null)
+                return;
+
             if (metaType == MetaType.DebugLogs)
                 Application.logMessageReceivedThreaded -= DebugLogging;
             else if (metaType == MetaType.AssetLoadingTrigger)
             {
                 UIButton.onUpdateUI -= OnUpdateUI;
-                XRSlideManager.OnAssetLoadProgressUpdate -= UpdateRadialProgressSmooth;
-                XRSlideManager.OnAssetLoadStrated -= UpdateRadialProgressVisibility;
+                XRSlideManager.Instance.OnAssetLoadProgressUpdate -= UpdateRadialProgressSmooth;
+                XRSlideManager.Instance.OnAssetLoadStarted -= UpdateRadialProgressVisibility;
+            }
+            else if (metaType == MetaType.SlideActiveTime)
+            {
+                XRSlideManager.Instance.OnSlideActiveTimeUpdate -= UpdateMetadata;
             }
             else
             {
-                XRSlideManager.OnXRSlideChanged -= UpdateMetadata;
-                XRSlideManager.OnXRTriggerChanged -= UpdateMetadata;
-                XRSlideManager.OnDissolveInProgressNormalized -= UpdateMetadata;
-                XRSlideManager.OnDissolveOutProgressNormalized -= UpdateMetadataReversed;
+                XRSlideManager.Instance.OnXRSlideChanged -= UpdateMetadata;
+                XRSlideManager.Instance.OnXRTriggerChanged -= UpdateMetadata;
+                XRSlideManager.Instance.OnDissolveInProgressNormalized -= UpdateMetadata;
+                XRSlideManager.Instance.OnDissolveOutProgressNormalized -= UpdateMetadataReversed;
 
                 //XRSlideManager.OnDissolveInProgress -= UpdateMetadata;
                 //XRSlideManager.OnDissolveOutProgress -= UpdateMetadataReversed;
@@ -126,6 +150,11 @@ namespace NSYNK.HyperSlides.UI
                 UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(rect);
         }
 
+        /// <summary>
+        /// Overload to update metadata based on trigger changes as well.
+        /// </summary>
+        /// <param name="slide"></param>
+        /// <param name="activeTrigger"></param>
         private void UpdateMetadata(XRSlide slide, XRSlide.Trigger activeTrigger)
         {
             switch (updateObject.GetType().ToString())
@@ -153,9 +182,16 @@ namespace NSYNK.HyperSlides.UI
                 case "UnityEngine.UI.Image":
                     ((UnityEngine.UI.Image)updateObject).fillAmount = progress;
                     break;
+                case "TMPro.TextMeshProUGUI":
+                    ((TMPro.TextMeshProUGUI)updateObject).text = MetadataString();
+                    break;
             }
         }
 
+        /// <summary>
+        /// Update the radial progress in reverse.
+        /// </summary>
+        /// <param name="progress"></param>
         private void UpdateMetadataReversed(float progress)
         {
             if (!CheckUpdateObject())
@@ -168,10 +204,14 @@ namespace NSYNK.HyperSlides.UI
                     break;
             }
         }
-        
+
+        /// <summary>
+        /// Update the progress of the radial loading based on the asset loading progress.
+        /// </summary>
+        /// <param name="started"></param>
         private void UpdateRadialProgressVisibility(bool started)
         {
-            if(started) assetLoadingProgress = 0;
+            if (started) assetLoadingProgress = 0;
             switch (updateObject.GetType().ToString())
             {
                 case "UnityEngine.UI.Mask":
@@ -189,7 +229,7 @@ namespace NSYNK.HyperSlides.UI
                     break;
             }
         }
-        
+
         /// <summary>
         /// An eased progress filling based on a float
         /// </summary>
@@ -198,7 +238,7 @@ namespace NSYNK.HyperSlides.UI
         {
             bool isImage = updateObject.GetType().ToString() == "UnityEngine.UI.Image";
             bool isMask = updateObject.GetType().ToString() == "UnityEngine.UI.Mask";
-            
+
             this.AnimateFloat(transform,
                 Easing.Ease.EaseInOutQuad,
                 // currentFill,
@@ -230,12 +270,16 @@ namespace NSYNK.HyperSlides.UI
                         {
                             ((UnityEngine.UI.Mask)updateObject).enabled = false;
                         }
-                                
+
                         // Debug.Log($"[MetadataViewer][{gameObject.name}] Finished radial progress [{progress}]");
                     }
                 });
         }
 
+        /// <summary>
+        /// Check if the update object is assigned and log a warning if not.
+        /// </summary>
+        /// <returns></returns>
         private bool CheckUpdateObject()
         {
             if (updateObject == null)
@@ -252,34 +296,43 @@ namespace NSYNK.HyperSlides.UI
             }
         }
 
+        /// <summary>
+        /// Based on the selected MetaType, return a string to be displayed. Mainly used for development and debugging, but can be extended for other uses as well.
+        /// </summary>
+        /// <returns></returns>
         private string MetadataString()
         {
             string returnValue = "";
 
-            if (XRSlideManager.GetPresentationData() == null)
+            if (XRSlideManager.Instance.GetPresentationData() == null)
                 return returnValue;
 
             switch (metaType)
             {
                 case MetaType.SlideCount:
-                    returnValue = XRSlideManager.CurrentSlidePosition + " / " + XRSlideManager.GetPresentationData().contents.Count;
+                    returnValue = XRSlideManager.Instance.CurrentSlidePosition + " / " + XRSlideManager.Instance.GetPresentationData().contents.Count;
+                    break;
+                case MetaType.SlideActiveTime:
+                    returnValue = $"{XRSlideManager.Instance.SlideActiveTime:0.0}s";
                     break;
                 case MetaType.ActiveSlideName:
-                    //returnValue = XRSlideManager.GetCurrentSlide() != null ? XRSlideManager.GetCurrentSlide().id + " => " + XRSlideManager.GetCurrentSlide().displayName : "No active slide";
-                    returnValue = XRSlideManager.GetCurrentSlide() != null ? XRSlideManager.GetCurrentSlide().cueNumber + " " + XRSlideManager.GetCurrentSlide().displayName : "No active slide";
+                    returnValue = XRSlideManager.Instance.GetCurrentSlide() != null ? XRSlideManager.Instance.GetCurrentSlide().cueNumber + " " + XRSlideManager.Instance.GetCurrentSlide().displayName : "No active slide";
+                    break;
+                case MetaType.ActiveSlideNameRaw:
+                    returnValue = XRSlideManager.Instance.GetCurrentSlide() != null ? XRSlideManager.Instance.GetCurrentSlide().displayName : "";
                     break;
                 case MetaType.ActiveTriggerName:
-                    returnValue = XRSlideManager.GetCurrentTrigger() != null && XRSlideManager.GetCurrentTrigger().name != "EmptyTrigger" ? "Trigger: " + XRSlideManager.GetCurrentTrigger().name : "";
+                    returnValue = XRSlideManager.Instance.GetCurrentTrigger() != null && XRSlideManager.Instance.GetCurrentTrigger().name != "EmptyTrigger" ? "Trigger: " + XRSlideManager.Instance.GetCurrentTrigger().name : "";
                     break;
                 case MetaType.Annotation:
-                    returnValue = XRSlideManager.GetCurrentSlide()?.annotation;
+                    returnValue = XRSlideManager.Instance.GetCurrentSlide()?.annotation;
                     break;
                 case MetaType.NextSlideName:
-                    returnValue = XRSlideManager.GetNextSlide() != null ? (XRSlideManager.GetNextSlide().cueNumber + " " + XRSlideManager.GetNextSlide().displayName) : "No next slide";
+                    returnValue = XRSlideManager.Instance.GetNextSlide() != null ? (XRSlideManager.Instance.GetNextSlide().cueNumber + " " + XRSlideManager.Instance.GetNextSlide().displayName) : "No next slide";
                     returnValue = "Next Slide > " + returnValue;
                     break;
                 case MetaType.UserPosition:
-                    returnValue = XRInputManager.inputUserPosition.ToString();
+                    returnValue = XRInputManager.Instance.InputUserPosition.ToString();
                     break;
             }
 

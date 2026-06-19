@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/HyperslidesCore/Assets/Prefabs/UI/LoggingDebug.prefab.meta
+guid: 034bde57bf51541418200ac39ac00441
+========
 guid: 8722712a1814b6443bd28cb32144802a
+>>>>>>>> development:Assets/HyperslidesCore/Assets/Prefabs/UI/MasterVolumeSlider.prefab.meta
 PrefabImporter:
   externalObjects: {}
   userData: 

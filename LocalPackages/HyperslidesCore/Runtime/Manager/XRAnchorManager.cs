@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
 using UnityMainThreadDispatcher;
+using NSYNK.HyperSlides.Network;
 
 #if UNITY_IOS
 using UnityEngine.XR.ARKit;
@@ -22,15 +23,18 @@ namespace NSYNK.HyperSlides.XR
     /// </summary>
     public class XRAnchorManager : Singleton<XRAnchorManager>
     {
+        [Header("AR Foundation Managers")]
         public ARSession arSession;
         public ARMeshManager arMeshManager;
         public ARAnchorManager arAnchorManager;
         public ARTrackedImageManager arTrackedImageManager;
         public ARTrackedObjectManager arTrackedObjectManager;
-        public XRWorldAnchor positionAnchor, rotationAnchor;
 
-        public delegate void OnTrackingUpdate();
-        public static OnTrackingUpdate onTrackingUpdate;
+        [Header("XR World Anchors")]
+        public XRWorldAnchor positionAnchor;
+        public XRWorldAnchor rotationAnchor;
+
+        public event Action OnTrackingUpdate;
         public static ImageWorldAnchors imageWorldAnchors = new ImageWorldAnchors();
         public static bool arSupported = false;
         public static string persistentPath => Path.Combine(Application.persistentDataPath, "my_session.worldmap");
@@ -80,12 +84,12 @@ namespace NSYNK.HyperSlides.XR
         /// <returns></returns>
         public static bool IsTracking()
         {
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors)
                 return Instance.positionAnchor.IsTracking() && Instance.rotationAnchor.IsTracking();
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Image)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Image)
                 return Instance.positionAnchor.IsTracking();
 
-            return RuntimeHandler.Settings.trackingType == Settings.TrackingType.Free;
+            return HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Free;
         }
 
         /// <summary>
@@ -96,14 +100,14 @@ namespace NSYNK.HyperSlides.XR
             arSupported = await IsARSupported();
 
             //If not real device, skip ar session checks
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Free || !arSupported)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Free || !arSupported)
             {
                 await Debug.LogQueue("AR Supported: " + arSupported + ". Fallback to non tracked runtime.", this);
 
                 Dispatcher.Enqueue(() =>
                 {
-                    positionAnchor.transform.position = XRInputManager.inputUserPosition;
-                    positionAnchor.transform.rotation = Quaternion.Euler(0, XRInputManager.inputUserRotation.eulerAngles.y, 0);
+                    positionAnchor.transform.position = XRInputManager.Instance.InputUserPosition;
+                    positionAnchor.transform.rotation = Quaternion.Euler(0, XRInputManager.Instance.InputUserRotation.eulerAngles.y, 0);
 
                     rotationAnchor.transform.position = positionAnchor.transform.position + positionAnchor.transform.forward * 1;
                     rotationAnchor.transform.LookAt(positionAnchor.transform);
@@ -153,7 +157,7 @@ namespace NSYNK.HyperSlides.XR
             await SetAnchorSetupManagers(true);
 #if UNITY_IOS
 
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors)
                 await UIAnchorSetup.UpdateState(UIAnchorSetup.SetupState.WorldMapping);
             else
                 await UIAnchorSetup.UpdateState(UIAnchorSetup.SetupState.ImageTrackingPosition);
@@ -196,7 +200,7 @@ namespace NSYNK.HyperSlides.XR
                 HandleARAnchorManager(active);
                 HandleARTrackedImageManager(active);
 
-                onTrackingUpdate?.Invoke();
+                OnTrackingUpdate?.Invoke();
             });
 
             await Awaitable.MainThreadAsync();
@@ -214,7 +218,7 @@ namespace NSYNK.HyperSlides.XR
 
         private void HandleARTrackedImageManager(bool active)
         {
-            bool setImageTrackingEnabled = RuntimeHandler.Settings.trackingType != Settings.TrackingType.Image ? active : true;
+            bool setImageTrackingEnabled = HyperSlidesStateManager.Instance.Settings.trackingType != Settings.TrackingType.Image ? active : true;
 
             if (setImageTrackingEnabled != arTrackedImageManager.enabled)
             {
@@ -317,7 +321,7 @@ namespace NSYNK.HyperSlides.XR
                     rotationAnchor.RemoveAnchor(anchor.Value);
             }
         }
-        [System.Obsolete("Use UpdateAnchors method instead")] 
+        [System.Obsolete("Use UpdateAnchors method instead")]
         private void UpdateTrackedImageOnWorldAnchor(ARTrackedImage trackedImage)
         {
             if (trackedImage && trackedImage.trackingState == TrackingState.Tracking)
@@ -335,14 +339,14 @@ namespace NSYNK.HyperSlides.XR
 
             }
         }
-        
+
         protected virtual void UpdateWorldAnchorWithTrackable(ARTrackable trackable)
         {
             string name = "";
-            if (trackable is ARTrackedObject aRTrackedObject) 
-            { 
+            if (trackable is ARTrackedObject aRTrackedObject)
+            {
                 name = aRTrackedObject.referenceObject.name.Split('_')[0];
-            } 
+            }
             else if (trackable is ARTrackedImage aRTrackedImage)
             {
                 name = aRTrackedImage.referenceImage.name.Split('_')[0];
@@ -413,7 +417,7 @@ namespace NSYNK.HyperSlides.XR
         public void StartOverAnchorSetup()
         {
             RemoveAllAnchors();
-            HyperSlidesStateManager.UpdateAppState(HyperSlidesStateManager.AppState.DEVICE_SETUP);
+            HyperSlidesStateManager.Instance.UpdateAppState(HyperSlidesStateManager.AppState.DEVICE_SETUP, XRNetworkManager.Instance.LastSessionStored);
         }
 
         /// <summary>
@@ -422,7 +426,7 @@ namespace NSYNK.HyperSlides.XR
         private async void RemoveAllAnchors()
         {
             positionAnchor.RemoveAnchor();
-            rotationAnchor.RemoveAnchor();  
+            rotationAnchor.RemoveAnchor();
 
             worldAnchors.ForEach(anchor =>
             {
@@ -432,9 +436,12 @@ namespace NSYNK.HyperSlides.XR
 
             worldAnchors.Clear();
 
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
             // Reset session and clear world map
             await XRWorldMapManager.Instance.ResetARSessionCompletely();
+#else
+            //Wait for a moment to avoid warnings about missing await in async method
+            await Task.Delay(10);
 #endif
 
             imageWorldAnchors = new ImageWorldAnchors();
@@ -482,19 +489,19 @@ namespace NSYNK.HyperSlides.XR
             /// </summary>
             /// <param name="type">The <see cref="XRWorldAnchor.AnchorType"/> being set to distinguish default, rotation or position anchoring.</param>
             /// <param name="id">The ARSession managed trackable id of the created anchor.</param>
-            public void UpdateAnchorID(XRWorldAnchor.AnchorType type, string id)
+            public void UpdateAnchorID(XRWorldAnchor.WorldAnchorType type, string id)
             {
-                bool newID = type == XRWorldAnchor.AnchorType.Position ? !positionAnchorID.Equals(id) : !rotationAnchorID.Equals(id);
+                bool newID = type == XRWorldAnchor.WorldAnchorType.Position ? !positionAnchorID.Equals(id) : !rotationAnchorID.Equals(id);
 
-                if (type == XRWorldAnchor.AnchorType.Position)
+                if (type == XRWorldAnchor.WorldAnchorType.Position)
                     positionAnchorID = id;
-                if (type == XRWorldAnchor.AnchorType.Rotation)
+                if (type == XRWorldAnchor.WorldAnchorType.Rotation)
                     rotationAnchorID = id;
 
                 if (newID)
                     Instance.SaveAnchorIDsToDisk();
 
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
                 XRWorldMapManager.SaveWorldMapAsync();
 #endif
             }

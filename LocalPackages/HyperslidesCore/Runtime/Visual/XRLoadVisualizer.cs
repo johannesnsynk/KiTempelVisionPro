@@ -19,9 +19,9 @@ namespace NSYNK.HyperSlides.Runtime
         /// </summary>
         private void OnEnable()
         {
-            XRSlideManager.OnGlobalSlideTransitioned += UpdateOnGlobalSlideTransition;
-            XRSlideManager.OnDissolveInProgressNormalized += UpdateDissolveInProgress;
-            XRSlideManager.OnDissolveOutProgressNormalized += UpdateDissolveOutProgress;
+            XRSlideManager.Instance.OnGlobalSlideTransitioned += UpdateOnGlobalSlideTransition;
+            XRSlideManager.Instance.OnDissolveInProgressNormalized += UpdateDissolveInProgress;
+            XRSlideManager.Instance.OnDissolveOutProgressNormalized += UpdateDissolveOutProgress;
         }
 
         /// <summary>
@@ -29,9 +29,9 @@ namespace NSYNK.HyperSlides.Runtime
         /// </summary>
         private void OnDisable()
         {
-            XRSlideManager.OnGlobalSlideTransitioned -= UpdateOnGlobalSlideTransition;
-            XRSlideManager.OnDissolveInProgressNormalized -= UpdateDissolveInProgress;
-            XRSlideManager.OnDissolveOutProgressNormalized -= UpdateDissolveOutProgress;
+            XRSlideManager.Instance.OnGlobalSlideTransitioned -= UpdateOnGlobalSlideTransition;
+            XRSlideManager.Instance.OnDissolveInProgressNormalized -= UpdateDissolveInProgress;
+            XRSlideManager.Instance.OnDissolveOutProgressNormalized -= UpdateDissolveOutProgress;
         }
 
         /// <summary>

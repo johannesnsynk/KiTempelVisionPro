@@ -12,16 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b8036a108df0a4e509ab48f6d3169738, type: 3}
   m_Name: GlobalSettings
   m_EditorClassIdentifier: 
-  backend: https://next.hyperslides.de
+  DefaultServerConnection: {fileID: 11400000, guid: 90baf5f46fdaa4b0e88901d398c4d3c0,
+    type: 2}
   showNameTags: 0
-  NakamaProfile:
-    IP: nakama.hyperslides.de
-    Port: 443
-    SSL: 1
-    ServerKey: ooRB3B*7prh-dAD8Qnz*.UzTY
   updateRate: 5
   backupUpdateRate: 5
   slowUpdateRate: 0.001
+  socketCheckRate: 1
   handSmoothing: 5
   playerPositionEasing: 5
   playerRotationEasing: 5
@@ -30,6 +27,7 @@ MonoBehaviour:
   avatarPrefab: {fileID: 0}
   editModeAvatarPrefab: {fileID: 3052004689229848525, guid: 6a0a231b34ba6475dab75b14460ad26a,
     type: 3}
+  ShowModeratorPointer: 1
   localPointerEasing: 5
   pointerEasing: 5
   pointerHideTimer: 1
@@ -50,3 +48,7 @@ MonoBehaviour:
   showPersonaMarkersOnLobby: 1
   handheldTrackingType: 1
   xrTrackingType: 1
+  LocalPlayerPrefab: {fileID: 3803207676763623771, guid: 4d1cba2f7f7ee4ebdafe1aa279ece8ac,
+    type: 3}
+  PlayerPrefab: {fileID: 3803207676763623771, guid: a0836bda876a543d49b6b7d49360b480,
+    type: 3}

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -19,89 +20,208 @@ namespace NSYNK.HyperSlides.Runtime
 {
     public class DeviceInfo : Singleton<DeviceInfo>
     {
-        public static RuntimePlatform RuntimePlatform => Application.platform;
+        private RuntimePlatform runtimePlatform => Application.platform;
 
-        public static Vector3 Location = Vector3.zero;
-        public static XRPlayer.Role Role = XRPlayer.Role.Participant;
-        public static string DeviceID = "";
-        public static string DeviceType = "";
-        public static bool ServerOverride = false;
-        public static string ServerOverrideBackendIP = "";
-        public static string ServerOverrideNakamaIP = "";
-        public static int ServerOverrideNakamaPort = 0;
-        public static bool ServerOverrideNakamaSSL = false;
+        public string StandalonePresentationId = "";
+        public GameObject videoProductionPrefab;
+        public GameObject standalonePlayerPrefab;
 
-        [TextArea]
+        public XRPlayer.Role Role { get; set; } = XRPlayer.Role.Participant;
+        public string DeviceId { get; set; } = "";
+        public string DeviceName { get; set; } = "";
+        public string DeviceType { get; set; } = "";
+        public bool UseStandaloneSetup = false;
+        public Vector3 Location { get; set; } = Vector3.zero;
+
+        [TextArea, ReadOnly]
         public string deviceSummary;
 
-        public string defaultSceneName;
-        public List<PlatformScenePair> platformScenePairs;
-
+        //Load the current server connection from settings on runtime or from custom override in editor
 #if (UNITY_IOS || UNITY_VISIONOS) && !UNITY_EDITOR
         [DllImport("__Internal")]
-        private static extern bool GetBoolSetting(string key);
+        public static extern bool GetBoolSetting(string key);
 
         [DllImport("__Internal")]
-        private static extern string GetStringSetting(string key);
-#else
-        [Header("Editor only override")]
-        public bool EditorOverride = false;
-        public string EditorOverrideBackendIP = "";
-        public string EditorOverrideNakamaIP = "";
-        public int EditorOverrideNakamaPort = 0;
-        public bool EditorOverrideNakamaSSL = false;
+        public static extern string GetStringSetting(string key);
 
-        private bool GetBoolSetting(string key) => key == "server_override" ? EditorOverride : EditorOverrideNakamaSSL;
-        private string GetStringSetting(string key) {
+        [DllImport("__Internal")]
+        private static extern void SetKeyChainValueFromNative(string key, string value, string group);
+
+        [DllImport("__Internal")]
+        private static extern IntPtr GetKeyChainValueFromNative(string key, string group);
+
+        public void SetKeyChainValue(string key, string value, string accessGroup)
+        {
+            SetKeyChainValueFromNative(key, value, accessGroup);
+        }
+
+        public string GetKeyChainValue(string key, string accessGroup)
+        {
+            IntPtr ptr = GetKeyChainValueFromNative(key, accessGroup);
+            if (ptr == IntPtr.Zero)
+                return "";
+
+            string result = Marshal.PtrToStringAnsi(ptr);
+            return result;
+        }
+#else
+        public void SetKeyChainValue(string key, string value, string accessGroup) { }
+        public string GetKeyChainValue(string key, string accessGroup) => "";
+
+        /// <summary>
+        /// Editor and standalone version of getting the correct boolean values from file or settings
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public static bool GetBoolSetting(string key)
+        {
             switch (key)
             {
+                case "use_standalone_setup":
+                    return Instance.UseStandaloneSetup;
+                case "sentry_logging":
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.SentryLogging;
+                case "server_override_nakama_ssl":
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.SSL;
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>
+        /// Editor and standalone version of getting the correct string values from file or settings
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public static string GetStringSetting(string key)
+        {
+            switch (key)
+            {
+                case "standalone_presentation_id":
+                    return Instance.StandalonePresentationId;
+                case "server_override_mode":
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.ConnectionName;
                 case "server_override_backend_ip":
-                    return EditorOverrideBackendIP;
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.BackendIP;
                 case "server_override_nakama_ip":
-                    return EditorOverrideNakamaIP;
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.NakamaIP;
                 case "server_override_nakama_port":
-                    return EditorOverrideNakamaPort.ToString();
+                    return HyperSlidesStateManager.Instance.CurrentServerConnection.Port.ToString();
                 default:
                     return "";
-            }   
+            }
         }
 #endif
 
-
-        private void Start()
+        /// <summary>
+        /// Get default device info on awake
+        /// </summary>
+        protected override void OnSingletonAwake()
         {
-            //PlayerPrefs.DeleteAll();
-            DeviceID = PlayerPrefs.GetString("deviceId", SaveDeviceID());
+            if (string.IsNullOrEmpty(GetKeyChainValue("DeviceId", "com.NSYNK.sharedvalues")))
+            {
+                DeviceId = PlayerPrefs.GetString("DeviceId", SaveDeviceId());
+                SetKeyChainValue("DeviceId", DeviceId, "com.NSYNK.sharedvalues");
+            }
+            else
+                DeviceId = GetKeyChainValue("DeviceId", "com.NSYNK.sharedvalues");
+
             DeviceType = SystemInfo.deviceModel;
 
+            Debug.Log($"Device OS / Platform: {runtimePlatform}, Device Type: {DeviceType}", Instance);
+        }
+
+        /// <summary>
+        /// Load the server connection from settings or custom override
+        /// </summary>
+        public void Start()
+        {
             CheckServerOverrideSettings();
         }
 
+        /// <summary>
+        /// Check if there are override settings for the server connection and apply them
+        /// </summary>
         public void CheckServerOverrideSettings()
         {
             Debug.Log("Checking for server IP override", Instance);
 
-            ServerOverride = GetBoolSetting("server_override");
-            ServerOverrideBackendIP = GetStringSetting("server_override_backend_ip");
-            ServerOverrideNakamaIP = GetStringSetting("server_override_nakama_ip");
-            ServerOverrideNakamaPort = int.Parse(GetStringSetting("server_override_nakama_port"));
-            ServerOverrideNakamaSSL = GetBoolSetting("server_override_nakama_ssl");
+#if !UNITY_EDITOR && !UNITY_VISIONOS && !UNITY_IOS
+            GetServerConnectionFromDataPath();
+#endif
+
+            string serverMode = GetStringSetting("server_override_mode");
+
+            UseStandaloneSetup = GetBoolSetting("use_standalone_setup");
+            StandalonePresentationId = GetStringSetting("standalone_presentation_id");
+
+            bool serverOverride = string.Equals(serverMode, "custom", StringComparison.OrdinalIgnoreCase);
+
+            if (serverOverride)
+            {
+                ServerConnection customConnection = new ServerConnection
+                {
+                    ConnectionName = "custom",
+                    BackendIP = GetStringSetting("server_override_backend_ip"),
+                    NakamaIP = GetStringSetting("server_override_nakama_ip"),
+                    Port = int.TryParse(GetStringSetting("server_override_nakama_port"), out int nakamaPort) ? nakamaPort : 0,
+                    SSL = GetBoolSetting("server_override_nakama_ssl"),
+                    SentryLogging = GetBoolSetting("sentry_logging")
+                };
+
+                HyperSlidesStateManager.Instance.AddNewConnectionAndSet(customConnection);
+            }
+            else
+            {
+                HyperSlidesStateManager.Instance.SetServerConnection(serverMode);
+            }
+
+            LoadCorrectPrefab();
         }
 
-        public static async Awaitable GetUserLocation()
+        private void LoadCorrectPrefab()
         {
-            await Debug.LogQueue($"Getting user location", Instance);
-
-#if UNITY_VISIONOS
-            //await Instance.VisionOSLocation();
-#elif UNITY_IOS
-            await Instance.IOSLocation();
-#else
-            Dispatcher.Enqueue(() => Debug.Log($"Location services not supported, skipping", Instance));
-            await Awaitable.MainThreadAsync();
+#if UNITY_IOS
+            if (UseStandaloneSetup)
+                Instantiate(standalonePlayerPrefab);
+            else
+                Instantiate(videoProductionPrefab);
 #endif
         }
+        /// <summary>
+        /// Load a server connection from a json file in the persistent data path
+        /// </summary>
+        /// <returns></returns>
+        private void GetServerConnectionFromDataPath()
+        {
+            string path = Application.persistentDataPath + "/" + "LocalServerConnection.json";
 
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    string json = System.IO.File.ReadAllText(path);
+                    Debug.Log("Loaded ServerConnection from: " + path + " " + json, this);
+                    ServerConnection serverConnection = Newtonsoft.Json.JsonConvert.DeserializeObject<ServerConnection>(json);
+                    HyperSlidesStateManager.Instance.AddNewConnectionAndSet(serverConnection);
+                }
+                else
+                {
+                    HyperSlidesStateManager.Instance.SetServerConnection();
+                    Debug.LogWarning("No ServerConnection found at: " + path + " Using default from inspector.", this);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Error loading ServerConnection from: " + path + " Using default from inspector. " + e.Message, this);
+            }
+        }
+
+        /// <summary>
+        /// Get the local IP address of the device
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="System.Exception"></exception>
         public string GetLocalIPAddress()
         {
             var host = Dns.GetHostEntry(Dns.GetHostName());
@@ -115,139 +235,35 @@ namespace NSYNK.HyperSlides.Runtime
             throw new System.Exception("No network adapters with an IPv4 address in the system!");
         }
 
-        private async Awaitable VisionOSLocation()
-        {
-            if (!UnityEngine.Input.location.isEnabledByUser)
-            {
-                await Debug.LogQueue("Location not enabled on device or app does not have permission to access location");
-                return;
-            }
-
-            // Waits until the location service initializes
-            int maxWait = 20;
-            while (UnityEngine.Input.location.status == LocationServiceStatus.Initializing && maxWait > 0)
-            {
-                await Task.Delay(1000);
-                maxWait--;
-            }
-
-            // If the service didn't initialize in 20 seconds this cancels location service use.
-            if (maxWait < 1)
-            {
-                await Debug.LogQueue("Timed out");
-                return;
-            }
-
-            // If the connection failed this cancels location service use.
-            if (UnityEngine.Input.location.status == LocationServiceStatus.Failed)
-            {
-                await Debug.LogQueue("Unable to determine device location");
-                return;
-            }
-            else
-            {
-                // If the connection succeeded, this retrieves the device's current location and displays it in the Console window.
-                Location.x = UnityEngine.Input.location.lastData.longitude;
-                Location.y = UnityEngine.Input.location.lastData.altitude;
-                Location.z = UnityEngine.Input.location.lastData.latitude;
-
-                await Debug.LogQueue($"Last Data: " + Location, Instance);
-            }
-
-            await Debug.LogQueue($"Status: " + UnityEngine.Input.location.status, Instance);
-        }
-
-        private async Awaitable IOSLocation()
-        {
-            await Awaitable.MainThreadAsync();
-            //try
-            //{
-            //    locationService.Start();
-
-            //    int attempts = 5;
-
-            //    while (attempts > 0 || locationService.status != LocationServiceStatus.Running)
-            //    {
-            //        await Task.Delay(1000);
-            //        attempts--;
-            //    }
-
-            //    if (locationService.status == LocationServiceStatus.Failed)
-            //        return;
-            //    else
-            //    {
-            //        Location.x = locationService.lastData.longitude;
-            //        Location.y = locationService.lastData.altitude;
-            //        Location.z = locationService.lastData.latitude;
-            //    }
-            //    //Stop retrieving location
-            //    locationService.Stop();
-            //}
-            //catch (Exception e)
-            //{
-            //    HyperSlidesStateManager.UpdateAppState(HyperSlidesStateManager.AppState.ERROR, "Location service failed: " + e);
-            //}
-        }
-
-        private async Awaitable DefaultLocationService()
-        {
-            await Awaitable.MainThreadAsync();
-        }
-
-        /// <summary>
-        /// Load platform dependent scenes or default
-        /// </summary>
-        public static async Awaitable LoadPlatformAssets()
-        {
-            PlatformScenePair foundScenePair = Instance.platformScenePairs.Find(psp => psp.platform == Application.platform);
-
-            AsyncOperation asyncSceneLoad = null;
-
-            if (foundScenePair != null)
-                if (SceneManager.GetActiveScene().name != foundScenePair.sceneName)
-                    asyncSceneLoad = SceneManager.LoadSceneAsync(foundScenePair.sceneName);
-                else if (SceneManager.GetSceneByName(Instance.defaultSceneName).IsValid())
-                    if (SceneManager.GetActiveScene().name != Instance.defaultSceneName)
-                        asyncSceneLoad = SceneManager.LoadSceneAsync(Instance.defaultSceneName);
-                    else
-                    {
-                        await Debug.LogQueue(
-                            $"Cannot load scenes. Scene pairs available ({Instance.platformScenePairs.Count}). " +
-                            (string.IsNullOrEmpty(Instance.defaultSceneName) ? "DefaultSceneName is empty" : $"Scene <b>{Instance.defaultSceneName}</b> not added to build list"), Instance);
-
-                        return;
-                    }
-
-            while (asyncSceneLoad != null && !asyncSceneLoad.isDone)
-                await Task.Delay(1);
-
-            await GetUserLocation();
-            await Debug.LogQueue($"Device OS / Platform: {RuntimePlatform}, ", Instance);
-        }
-
         /// <summary>
         /// Is this device an actual XR headset
         /// </summary>
         /// <returns>True, if the device can handle foveated rendering</returns>
-        public static bool IsXRDevice()
+        public bool IsXRDevice()
         {
             //Defaulting to visionos for now until we add more devices
-            return RuntimePlatform == RuntimePlatform.VisionOS;
+            return runtimePlatform == RuntimePlatform.VisionOS;
         }
 
         /// <summary>
-        /// Save the deviceid to player prefs
+        /// Get the DeviceId from player prefs
         /// </summary>
-        public static string SaveDeviceID()
+        /// <returns></returns>
+        public string GetDeviceId() => DeviceId;
+
+        /// <summary>
+        /// Save the DeviceId to player prefs
+        /// </summary>
+        public string SaveDeviceId()
         {
-            var deviceId = PlayerPrefs.GetString("deviceId", SystemInfo.deviceUniqueIdentifier);
+            DeviceId = PlayerPrefs.GetString("DeviceId", SystemInfo.deviceUniqueIdentifier);
 
-            if (deviceId == SystemInfo.unsupportedIdentifier)
-                deviceId = Guid.NewGuid().ToString();
+            if (DeviceId == SystemInfo.unsupportedIdentifier)
+                DeviceId = Guid.NewGuid().ToString();
 
-            PlayerPrefs.SetString("deviceId", deviceId);
+            PlayerPrefs.SetString("DeviceId", DeviceId);
 
-            return deviceId;
+            return DeviceId;
         }
 
         /// <summary>
@@ -256,12 +272,11 @@ namespace NSYNK.HyperSlides.Runtime
         /// <returns>A string with all device info available</returns>
         public string DeviceInfoString()
         {
-            string summary = "Platform: " + RuntimePlatform;
+            string summary = "Platform: " + runtimePlatform;
 
-            summary += "\nDeviceID: " + DeviceID;
+            summary += "\nDeviceId: " + DeviceId;
             summary += "\nDeviceType: " + DeviceType;
             summary += "\nXR Device: " + IsXRDevice();
-            summary += "\nLocation: " + Location;
 
             return summary;
         }
@@ -270,12 +285,5 @@ namespace NSYNK.HyperSlides.Runtime
         {
             deviceSummary = DeviceInfoString();
         }
-    }
-
-    [Serializable]
-    public class PlatformScenePair
-    {
-        public string sceneName;
-        public RuntimePlatform platform;
     }
 }

@@ -17,75 +17,58 @@ namespace NSYNK.HyperSlides.Core
     /// </summary>
     public class XRSlideManager : Singleton<XRSlideManager>
     {
-        public static XRSlideElement.VisibilityState visibilityState = XRSlideElement.VisibilityState.None;
-        public List<SlideAssetLoad> slideAssets = new();
+        /// <summary>Event that is triggered when the slide changes</summary>
+        public event Action<XRSlide> OnXRSlideChanged;
+        /// <summary>Event that is triggered when the slide is prepared, before any addressables are loaded</summary>
+        public event Action<XRSlide> OnXRSlidePrepare;
+        /// <summary>Event that is triggered when the slide is preloaded, before any transition starts</summary>
+        public event Action<XRSlide> OnXRSlidePreload;
+        /// <summary>Event that is triggered when the global slide visibility state changes</summary>
+        public event Action<XRSlideElement.VisibilityState> OnGlobalSlideTransitioned;
+        /// <summary>Event that is triggered when the current trigger changes</summary>
+        public event Action<XRSlide, XRSlide.Trigger> OnXRTriggerChanged;
+        /// <summary>Event that is triggered on dissolving in progress</summary>
+        public event Action<float> OnDissolveInProgress, OnDissolveInProgressNormalized;
+        /// <summary>Event that is triggered on dissolving out progress</summary>
+        public event Action<float> OnDissolveOutProgress, OnDissolveOutProgressNormalized;
+        /// <summary>Float return for the current active slide time</summary>
+        public event Action<float> OnSlideActiveTimeUpdate;
+        /// <summary>Event that is triggered on asset load progress update</summary>
+        public event Action<float> OnAssetLoadProgressUpdate;
+        /// <summary>Event that is triggered when asset loading starts</summary>
+        public event Action<bool> OnAssetLoadStarted;
 
-#if UNITY_EDITOR
-        [Header("Debug Editor information")]
-        [Space]
-        public XRPresentation inspectorPresentation;
-        public XRSlide inspectorSlide;
-        public XRSlide.Trigger inspectorTrigger;
-#endif
+        /// <summary>The current global visibility state of all slide elements</summary>
+        public XRSlideElement.VisibilityState CurrentVisibilityState { get; private set; } = XRSlideElement.VisibilityState.None;
+        /// <summary>The current active presentation</summary>
+        public XRPresentation CurrentPresentation { get; private set; } = null;
+        /// <summary>The current active slide index</summary>
+        public int NetworkSlide { get; private set; } = 0;
+        /// <summary>Current slide active time</summary>
+        public float SlideActiveTime { get; private set; } = 0;
 
-        /// <summary>
-        /// Delegate to register, when any slide or trigger changes.
-        /// </summary>
-        /// <param name="slide">The active slide</param>
-        /// <param name="trigger">The active trigger</param>
-        public delegate void OnXRSlideChange(XRSlide slide);
-        public delegate void OnXRTriggerChange(XRSlide slide, XRSlide.Trigger trigger);
-        public delegate void OnDissolveProgress(float progress);
-        public delegate void OnSlideTimeChange(float time);
-        public delegate void OnGlobalSlideTransition(XRSlideElement.VisibilityState visibilityState);
-        public delegate void OnAssetLoadProgress(float progress);
-        public delegate void OnAssetLoad(bool started);
-        //Use this to trigger any slide change
-        public static OnXRSlideChange OnXRSlideChanged;
-        public static OnXRSlideChange ONXRSlidePrepare;
-        public static OnXRSlideChange ONXRSlidePreload;
-        public static OnGlobalSlideTransition OnGlobalSlideTransitioned;
-        //Use this to trigger any trigger change
-        public static OnXRTriggerChange OnXRTriggerChanged;
-        //A simple float return trigger to align visuals to the current progress
-        public static OnDissolveProgress OnDissolveInProgress, OnDissolveInProgressNormalized;
-        public static OnDissolveProgress OnDissolveOutProgress, OnDissolveOutProgressNormalized;
-        // Simple float return trigger to inform about the current time the slide has been active
-        public static OnSlideTimeChange OnSlideActiveTimeUpdate;
-        //Float return for addressables asset loading
-        public static OnAssetLoadProgress OnAssetLoadProgressUpdate;
-        public static OnAssetLoad OnAssetLoadStrated;
-        //The current presentation that is loaded
-        public static XRPresentation CurrentPresentation;
-        public static int NetworkSlide = 0;
+        /// <summary>Should the manager call Resources.UnloadUnusedAssets after each slide transition. </summary>
+        public bool DoUnloadUnusedAssets = true;
 
-        //The current active slide
-        private static XRSlide currentSlide;
+        /// <summary>List of all registered slide assets for loading/unloading</summary>
+        private List<SlideAssetLoad> slideAssets = new();
+        /// <summary>The current active slide</summary>
+        private XRSlide currentSlide;
         //The current trigger or the placeholder
-        private static XRSlide.Trigger currentTrigger;
-        //All slide elements that need to load their addressable
-
+        private XRSlide.Trigger currentTrigger;
+        /// <summary>Current dissolve in and out duration</summary>
         [SerializeField, ReadOnly]
-        //Fading time for max duration easing
         private float dissolveInDuration, dissolveOutDuration = 0;
+        /// <summary>Current dissolve in and out progress</summary>
         [SerializeField, ReadOnly]
-        //Current normalized fading progress 0-1-0
-        private float dissolveInProgress, dissolveOutProgress, dissolveNormalized = 0;
+        private float dissolveInProgress, dissolveOutProgress;
+        /// <summary>Current dissolve normalized value from 0 to 1</summary>
+        [SerializeField, ReadOnly, Range(0, 1)]
+        private float dissolveNormalized = 0;
 
-        [SerializeField, ReadOnly]
-        private float slideActiveTime = 0;
-        public float SlideActiveTime { 
-            private set { 
-                slideActiveTime = value;
-            }
-            get {
-                return slideActiveTime; 
-            }
-        }
-        [SerializeField, ReadOnly]
         //Current slide position from 1 to flatten contents list count
-        private static int currentSlidePosition = 0;
-        public static int CurrentSlidePosition
+        private int currentSlidePosition = 0;
+        public int CurrentSlidePosition
         {
             get { return currentSlidePosition; }
             set
@@ -96,6 +79,21 @@ namespace NSYNK.HyperSlides.Core
                     value = CurrentPresentation.contents.Count;
 
                 currentSlidePosition = value;
+            }
+        }
+
+        ///Is there a loading action in progress
+        public static bool LoadingActionInProgress => loadingActionProgress < 1f && loadingActionProgress > 0f;
+
+        //The current progress of the loading action
+        private static float loadingActionProgress = 0;
+        public static float LoadingActionProgress
+        {
+            get => loadingActionProgress;
+            set
+            {
+                loadingActionProgress = value;
+                UIButton.onUpdateUI?.Invoke();
             }
         }
 
@@ -110,13 +108,13 @@ namespace NSYNK.HyperSlides.Core
 
         private void OnEnable()
         {
-            XRNetworkManager.onNetworkSlideUpdate += NetworkSlideUpdate;
+            XRNetworkManager.Instance.OnNetworkSlideUpdate += NetworkSlideUpdate;
             //XRDataManager.onDataReceived += LoadDefaultPresentation;
         }
 
         private void OnDisable()
         {
-            XRNetworkManager.onNetworkSlideUpdate -= NetworkSlideUpdate;
+            XRNetworkManager.Instance.OnNetworkSlideUpdate -= NetworkSlideUpdate;
             //XRDataManager.onDataReceived -= LoadDefaultPresentation;
         }
 
@@ -142,20 +140,15 @@ namespace NSYNK.HyperSlides.Core
         {
             Dispatcher.Enqueue(() =>
             {
-                XRPresentation newPresentation = XRDataManager.allPresentations.Find(p => p.id == networkObject.presentationId);
+                XRPresentation newPresentation = XRDataManager.Instance.AllPresentations.Find(p => p.id == networkObject.presentationId);
 
-                if (networkObject.tickRate > 0)
-                    RuntimeHandler.Settings.updateRate = networkObject.tickRate;
-                else
-                    RuntimeHandler.Settings.updateRate = RuntimeHandler.Settings.backupUpdateRate;
-
-                RuntimeHandler.Settings.showNameTags = networkObject.showNameTags || RuntimeHandler.Settings.showNameTags;
+                HyperSlidesStateManager.Instance.Settings.showNameTags = networkObject.showNameTags || HyperSlidesStateManager.Instance.Settings.showNameTags;
 
                 if (newPresentation != null)
                 {
                     if (CurrentPresentation == null || (CurrentPresentation.id != networkObject.presentationId))
                         SetPresentation(newPresentation, networkObject.presentationContentIndex);
-                    else
+                    else if(CurrentSlidePosition != networkObject.presentationContentIndex)
                         SetSlide(networkObject.presentationContentIndex);
                 }
                 else
@@ -165,10 +158,8 @@ namespace NSYNK.HyperSlides.Core
 
         private void Update()
         {
-            if (XRNetworkManager.localPlayer && CurrentPresentation != null)
-            {
+            if (CurrentPresentation != null)
                 UpdateSlideActiveTime();
-            }
         }
 
         /// <summary>
@@ -176,7 +167,7 @@ namespace NSYNK.HyperSlides.Core
         /// </summary>
         public void NextSlide()
         {
-            if (!XRNetworkManager.localPlayer || CurrentPresentation == null)
+            if (!XRNetworkManager.Instance.LocalPlayer || CurrentPresentation == null)
                 return;
 
             if (XRUIManager.TimerRunning())
@@ -184,8 +175,8 @@ namespace NSYNK.HyperSlides.Core
 
             StopAllCoroutines();
 
-            if (DeviceInfo.Role >= XRPlayer.Role.Moderator ||
-                DeviceInfo.Role == XRPlayer.Role.Simulation)
+            if (DeviceInfo.Instance.Role >= XRPlayer.Role.Moderator ||
+                DeviceInfo.Instance.Role == XRPlayer.Role.Simulation)
             {
                 //CurrentSlidePosition++;
                 //Debug.Log("NEXT: " + CurrentSlidePosition);
@@ -199,7 +190,7 @@ namespace NSYNK.HyperSlides.Core
         /// </summary>
         public void PreviousSlide()
         {
-            if (!XRNetworkManager.localPlayer || CurrentPresentation == null)
+            if (!XRNetworkManager.Instance.LocalPlayer || CurrentPresentation == null)
                 return;
 
             if (XRUIManager.TimerRunning())
@@ -207,8 +198,8 @@ namespace NSYNK.HyperSlides.Core
 
             StopAllCoroutines();
 
-            if (DeviceInfo.Role >= XRPlayer.Role.Moderator ||
-                DeviceInfo.Role == XRPlayer.Role.Simulation)
+            if (DeviceInfo.Instance.Role >= XRPlayer.Role.Moderator ||
+                DeviceInfo.Instance.Role == XRPlayer.Role.Simulation)
             {
                 //CurrentSlidePosition--;
                 XRNetworkManager.Instance.SendSlidePrevUpdate();
@@ -272,11 +263,6 @@ namespace NSYNK.HyperSlides.Core
                 }
             }
 
-#if UNITY_EDITOR
-            inspectorSlide = nextSlide;
-            inspectorTrigger = nextTrigger;
-#endif
-
             if (nextSlide != null)
             {
                 int countIndex = CurrentPresentation.slides.Count();
@@ -297,21 +283,21 @@ namespace NSYNK.HyperSlides.Core
         /// Set the dissolve in duration from all needed slidelements
         /// </summary>
         /// <param name="duration">The new duration, which will be compared to the latest in length</param>
-        public static void SetDissolveInDuration(float duration) => Instance.dissolveInDuration = duration > Instance.dissolveInDuration ? duration : Instance.dissolveInDuration;
+        public void SetDissolveInDuration(float duration) => dissolveInDuration = duration > dissolveInDuration ? duration : dissolveInDuration;
         /// <summary>
         /// Set the dissolve out duration from all needed slidelements
         /// </summary>
         /// <param name="duratin">The new duration, which will be compared to the latest in length</param>
-        public static void SetDissolveOutDuration(float duratin) => Instance.dissolveOutDuration = duratin > Instance.dissolveOutDuration ? duratin : Instance.dissolveOutDuration;
-        public static XRSlide.Trigger GetCurrentTrigger() => currentTrigger;
-        public static XRPresentation GetPresentationData() => CurrentPresentation;
+        public void SetDissolveOutDuration(float duratin) => dissolveOutDuration = duratin > dissolveOutDuration ? duratin : dissolveOutDuration;
+        public XRSlide.Trigger GetCurrentTrigger() => currentTrigger;
+        public XRPresentation GetPresentationData() => CurrentPresentation;
 
         /// <summary>
         /// Get the current slide, if no slide is set, return a new instance with the current presentation id and the count of contents
         /// This is used to avoid null references in the UI
         /// </summary>
         /// <returns></returns>
-        public static XRSlide GetCurrentSlide()
+        public XRSlide GetCurrentSlide()
         {
             if (currentSlide)
                 return currentSlide;
@@ -326,7 +312,7 @@ namespace NSYNK.HyperSlides.Core
         /// This is used to avoid null references in the UI
         /// </summary>
         /// <returns></returns>
-        public static XRSlide GetNextSlide()
+        public XRSlide GetNextSlide()
         {
             XRSlide nextSlide = null;
 
@@ -349,16 +335,12 @@ namespace NSYNK.HyperSlides.Core
         /// Update the presentation and restart from slide 0
         /// </summary>
         /// <param name="presentation"></param>
-        public static void SetPresentation(XRPresentation presentation, int currentSlide = 0)
+        public void SetPresentation(XRPresentation presentation, int currentSlide = 0)
         {
             CurrentPresentation = presentation;
             CurrentPresentation.GetContents();
 
             Instance.SetSlide(currentSlide);
-
-#if UNITY_EDITOR
-            Instance.inspectorPresentation = presentation;
-#endif
         }
 
         /// <summary>
@@ -366,7 +348,7 @@ namespace NSYNK.HyperSlides.Core
         /// </summary>
         /// <param name="slideElement">The slideelement reference</param>
         /// <param name="loadAsset">Should this slide element be visible in next step </param>
-        public static void RegisterSlideElement(XRSlideElement slideElement, bool loadAsset)
+        public void RegisterSlideElement(XRSlideElement slideElement, bool loadAsset)
         {
             SlideAssetLoad foundAssetLoad = Instance.slideAssets.Find(s => s.slideElement == slideElement);
 
@@ -381,19 +363,30 @@ namespace NSYNK.HyperSlides.Core
         /// </summary>
         private void UpdateSlideActiveTime()
         {
-            if (visibilityState == XRSlideElement.VisibilityState.FullyVisible ||
-                visibilityState == XRSlideElement.VisibilityState.DissolvingIn)
+            if (CurrentVisibilityState == XRSlideElement.VisibilityState.FullyVisible ||
+                CurrentVisibilityState == XRSlideElement.VisibilityState.DissolvingIn)
             {
-                if (slideActiveTime < float.MaxValue - 10)
+                if (SlideActiveTime < float.MaxValue - 10)
                     SlideActiveTime += Time.deltaTime;
                 else
                     SlideActiveTime = 0;
+
                 OnSlideActiveTimeUpdate?.Invoke(SlideActiveTime);
             }
             else
             {
                 SlideActiveTime = 0;
             }
+        }
+
+        /// <summary>
+        /// Update the global slide state for all listeners
+        /// </summary>
+        /// <param name="state"></param>
+        private void UpdateGlobalSlideState(XRSlideElement.VisibilityState state)
+        {
+            CurrentVisibilityState = state;
+            OnGlobalSlideTransitioned?.Invoke(state);
         }
 
         /// <summary>
@@ -406,18 +399,18 @@ namespace NSYNK.HyperSlides.Core
             dissolveOutDuration = .1f;
 
             //Prepare all contents
-            ONXRSlidePrepare?.Invoke(nextSlide);
+            OnXRSlidePrepare?.Invoke(nextSlide);
 
-            ONXRSlidePreload?.Invoke(preloadedNextSlide);
+            //Preload next and optionally previous slide assets
+            OnXRSlidePreload?.Invoke(preloadedNextSlide);
             //ONXRSlidePreload?.Invoke(preloadedPreviousSlide);
 
             dissolveOutProgress =
-                visibilityState == XRSlideElement.VisibilityState.DissolvingIn ?
+                CurrentVisibilityState == XRSlideElement.VisibilityState.DissolvingIn ?
                 dissolveOutDuration * (1 - dissolveNormalized) :
                 dissolveOutDuration * dissolveNormalized;
 
-            visibilityState = XRSlideElement.VisibilityState.DissolvingOut;
-            OnGlobalSlideTransitioned?.Invoke(visibilityState);
+            UpdateGlobalSlideState(XRSlideElement.VisibilityState.DissolvingOut);
 
             //dissolveOutProgress = dissolveOutDuration * dissolveNormalized;
 
@@ -436,18 +429,18 @@ namespace NSYNK.HyperSlides.Core
             }
 
             OnDissolveOutProgress?.Invoke(dissolveOutDuration);
-            visibilityState = XRSlideElement.VisibilityState.FullyHidden;
-            OnGlobalSlideTransitioned?.Invoke(visibilityState);
+            OnDissolveOutProgressNormalized?.Invoke(1);
+
+            UpdateGlobalSlideState(XRSlideElement.VisibilityState.FullyHidden);
 
             dissolveOutProgress = 0;
 
             //Sort by load asset and unload first, then load new assets
             if (slideAssets.Count > 0)
             {
-                XRUIManager.Instance.LoadingActionProgress = 0;
-                XRUIManager.Instance.LoadingActionInProgress = true;
-                OnAssetLoadStrated?.Invoke(true);
-                Debug.Log($"[XRSlideManager] Preparing addressables started");
+                LoadingActionProgress = 0;
+                OnAssetLoadStarted?.Invoke(true);
+                Debug.Log($"Preparing addressables started", Instance);
                 int processedAssets = 0;
                 slideAssets.OrderBy(sA => !sA.shouldLoadAsset);
 
@@ -459,9 +452,9 @@ namespace NSYNK.HyperSlides.Core
                         while (!assetLoad.IsDone())
                             yield return null;
                         processedAssets++;
-                        XRUIManager.Instance.LoadingActionProgress = Math.Clamp((processedAssets / (float)slideAssets.Count), 0, 1);
-                        OnAssetLoadProgressUpdate?.Invoke(Math.Clamp((processedAssets / (float)slideAssets.Count), 0, 1));
-                        Debug.Log($"[XRSlideManager] Processed {processedAssets}/{slideAssets.Count} slide assets (unloading); Progress: {processedAssets / (float)slideAssets.Count}");
+                        LoadingActionProgress = Math.Clamp(processedAssets / (float)slideAssets.Count, 0, 1);
+                        OnAssetLoadProgressUpdate?.Invoke(Math.Clamp(processedAssets / (float)slideAssets.Count, 0, 1));
+                        Debug.Log($"Processed {processedAssets}/{slideAssets.Count} slide assets (unloading); Progress: {processedAssets / (float)slideAssets.Count}", Instance);
                     }
                 }
 
@@ -473,21 +466,21 @@ namespace NSYNK.HyperSlides.Core
                         while (!assetLoad.IsDone())
                             yield return null;
                         processedAssets++;
-                        XRUIManager.Instance.LoadingActionProgress = Math.Clamp((processedAssets / (float)slideAssets.Count), 0, 1);
-                        OnAssetLoadProgressUpdate?.Invoke(Math.Clamp((processedAssets / (float)slideAssets.Count), 0, 1));
-                        Debug.Log($"[XRSlideManager] Processed {processedAssets}/{slideAssets.Count} slide assets (loading); Progress: {processedAssets / (float)slideAssets.Count}");
+                        LoadingActionProgress = Math.Clamp(processedAssets / (float)slideAssets.Count, 0, 1);
+                        OnAssetLoadProgressUpdate?.Invoke(Math.Clamp(processedAssets / (float)slideAssets.Count, 0, 1));
+                        Debug.Log($"Processed {processedAssets}/{slideAssets.Count} slide assets (loading); Progress: {processedAssets / (float)slideAssets.Count}", Instance);
                     }
                 }
 
-                XRUIManager.Instance.LoadingActionProgress = 1;
-                XRUIManager.Instance.LoadingActionInProgress = false;
-                OnAssetLoadStrated?.Invoke(false);
+                LoadingActionProgress = 1;
+                OnAssetLoadStarted?.Invoke(false);
                 // UIButton.onUpdateUI?.Invoke();
-                Debug.Log($"[XRSlideManager] Preparing addressables ended");
+                Debug.Log($"Preparing addressables ended", Instance);
             }
 
             // This unload is causing problems with certain assets. Unload should in theory still be happening but keep an eye on it
-            //Resources.UnloadUnusedAssets();
+            if (DoUnloadUnusedAssets)
+                Resources.UnloadUnusedAssets();
             yield return new WaitForEndOfFrame();
 
             yield return ContentFadeIn();
@@ -501,8 +494,7 @@ namespace NSYNK.HyperSlides.Core
         {
             OnXRSlideChanged?.Invoke(nextSlide);
 
-            visibilityState = XRSlideElement.VisibilityState.DissolvingIn;
-            OnGlobalSlideTransitioned?.Invoke(visibilityState);
+            UpdateGlobalSlideState(XRSlideElement.VisibilityState.DissolvingIn);
 
             if (currentSlide != null && nextSlide != null &&
                 currentSlide.id != nextSlide.id)
@@ -511,7 +503,9 @@ namespace NSYNK.HyperSlides.Core
             currentTrigger = nextTrigger;
 
             OnXRTriggerChanged?.Invoke(currentSlide, currentTrigger);
-            XRCameraManager.Instance.UpdateXROriginPosition(dissolveInDuration + dissolveOutDuration);
+
+            if (XRCameraManager.Instance)
+                XRCameraManager.Instance.UpdateXROriginPosition(dissolveInDuration + dissolveOutDuration);
 
             dissolveInProgress = 0;
 
@@ -530,10 +524,11 @@ namespace NSYNK.HyperSlides.Core
             dissolveInProgress = dissolveInDuration;
 
             OnDissolveInProgress?.Invoke(dissolveInDuration);
+            OnDissolveInProgressNormalized?.Invoke(1);
+
             OnXRSlideChanged?.Invoke(currentSlide);
 
-            visibilityState = XRSlideElement.VisibilityState.FullyVisible;
-            OnGlobalSlideTransitioned?.Invoke(visibilityState);
+            UpdateGlobalSlideState(XRSlideElement.VisibilityState.FullyVisible);
 
             dissolveNormalized = 0;
         }

@@ -18,13 +18,6 @@ namespace NSYNK.HyperSlides.UI
 
         public float LerpSpeed = 10f;
 
-        // Start is called once before the first execution of Update after the MonoBehaviour is created
-        void Start()
-        {
-
-        }
-
-        // Update is called once per frame
         void Update()
         {
             if (micLevelVisualizerImages.Count != HyperslidesAudioManager.Instance.NumChannels)
@@ -45,14 +38,8 @@ namespace NSYNK.HyperSlides.UI
         {
             this.ExecuteNextFrame(() =>
             {
-                // Initialize the microphone level visualizers when the component is enabled
                 InitMicLevelVisualizers();
             });
-        }
-
-        private void OnDisable()
-        {
-
         }
 
         private void InitMicLevelVisualizers()

@@ -19,8 +19,8 @@ namespace NSYNK.HyperSlides
 
         public XRSlide(string presentation, int cue)
         {
-            cueNumber = cue;
             displayName = "Empty Slide";
+            cueNumber = cue;
             annotation = "Empty Slide Annotation";
 
             contentTags.Add(new ContentTag("Empty Tag"));
@@ -30,7 +30,6 @@ namespace NSYNK.HyperSlides
 
         public int cueNumber;
         public bool enabled;
-        public string displayName;
         public string preview;
         public string headlineID;
         public string mediaID;
@@ -57,6 +56,7 @@ namespace NSYNK.HyperSlides
 
             public string id;
             public string name;
+            public bool active;
         }
 
         /// <summary>
@@ -68,6 +68,7 @@ namespace NSYNK.HyperSlides
         {
             public string id;
             public string name;
+            public bool active;
 
             public Trigger(string _id, string _name)
             {

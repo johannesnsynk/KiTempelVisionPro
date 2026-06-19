@@ -6,7 +6,8 @@ using UnityEngine;
 
 using TouchPhase = UnityEngine.InputSystem.TouchPhase;
 
-namespace NSYNK.HyperSlides.UI {
+namespace NSYNK.HyperSlides.UI
+{
     public class UIGrabber : MonoBehaviour
     {
         public GameObject Root;
@@ -17,25 +18,21 @@ namespace NSYNK.HyperSlides.UI {
         Vector3 positionOffset;
         Quaternion rotationOffset;
 
-        void OnEnable() 
+        void OnEnable()
         {
-            XRInputManager.onTouchUpdate += HandeChangeTouchPhase;
+            XRInputManager.Instance.OnTouchUpdate += HandeChangeTouchPhase;
         }
 
-        
-        void OnDisable() 
+        void OnDisable()
         {
-            XRInputManager.onTouchUpdate -= HandeChangeTouchPhase;
+            if (XRInputManager.Instance)
+                XRInputManager.Instance.OnTouchUpdate -= HandeChangeTouchPhase;
         }
 
-        void Destroy() 
+        void HandeChangeTouchPhase(TouchPhase touchPhase)
         {
-            XRInputManager.onTouchUpdate -= HandeChangeTouchPhase;
-        }
-
-
-        void HandeChangeTouchPhase(TouchPhase touchPhase) {
-            if (touchPhase == TouchPhase.Began && XRInputManager.Instance.m_SelectedObject == this.gameObject) {
+            if (touchPhase == TouchPhase.Began && XRInputManager.Instance.selectedObject == this.gameObject)
+            {
                 isActive = true;
                 InitializeMovement();
             }
@@ -43,33 +40,35 @@ namespace NSYNK.HyperSlides.UI {
                 isActive = false;
         }
 
-        void Update() {
+        void Update()
+        {
             if (!isActive)
                 return;
             Move();
         }
 
-        void InitializeMovement() {
+        void InitializeMovement()
+        {
             if (Root == null)
                 return;
             rootTransform = Root.transform;
-            interactionPosition = XRInputManager.Instance.primaryTouchData.interactionPosition;
-            var inverseDeviceRotation = Quaternion.Inverse(XRInputManager.Instance.primaryTouchData.inputDeviceRotation);
+            interactionPosition = XRInputManager.Instance.InteractionPosition;
+            var inverseDeviceRotation = Quaternion.Inverse(XRInputManager.Instance.InputUserRotation);
             rotationOffset = inverseDeviceRotation * rootTransform.rotation;
             positionOffset = inverseDeviceRotation * (rootTransform.position - interactionPosition);
         }
-        void Move() 
-        {   
+        void Move()
+        {
             if (Root == null)
                 return;
-            var deviceRotation = XRInputManager.Instance.primaryTouchData.inputDeviceRotation;
+            var deviceRotation = XRInputManager.Instance.InputUserRotation;
 
 #if UNITY_STANDALONE || UNITY_EDITOR
-            var headPosition = XRInputManager.Instance.localPoseDriver.transform.position;
+            var headPosition = XRInputManager.Instance.LocalPoseDriver.transform.position;
 #else
             var headPosition = XRTrackedUser.Instance.Position();
 #endif
-            var position = XRInputManager.Instance.primaryTouchData.interactionPosition + deviceRotation * positionOffset;
+            var position = XRInputManager.Instance.InteractionPosition + deviceRotation * positionOffset;
 
             // var rotation = deviceRotation * rotationOffset;
             // Root.transform.SetPositionAndRotation(position, rotation);

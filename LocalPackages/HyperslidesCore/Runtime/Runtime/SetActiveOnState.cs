@@ -18,25 +18,40 @@ namespace NSYNK.HyperSlides.Runtime
             FROM_STATE = 3
         }
 
-        private void OnEnable() => HyperSlidesStateManager.stateUpdate += HandleSetActive;
-        private void OnDisable() => HyperSlidesStateManager.stateUpdate -= HandleSetActive;
+        private void OnEnable() => HyperSlidesStateManager.Instance.OnStateUpdate += HandleSetActive;
+        private void OnDisable()
+        {
+            if (HyperSlidesStateManager.Instance == null)
+                return;
+
+            HyperSlidesStateManager.Instance.OnStateUpdate -= HandleSetActive;
+        }
 
         private void HandleSetActive(HyperSlidesStateManager.AppState state)
         {
-            switch (showType)
+            foreach (GameObject g in gameObjects)
             {
-                case ShowType.ON_STATE:
-                    gameObjects.ForEach(g => g.SetActive(state == appState));
-                    break;
-                case ShowType.EXCLUDE_STATE:
-                    gameObjects.ForEach(g => g.SetActive(state != appState));
-                    break;
-                case ShowType.TO_STATE:
-                    gameObjects.ForEach(g => g.SetActive(state <= appState));
-                    break;
-                case ShowType.FROM_STATE:
-                    gameObjects.ForEach(g => g.SetActive(state >= appState));
-                    break;
+                if (g == null)
+                {
+                    Debug.LogWarning("SetActiveOnState: One of the GameObjects is null. Please check the list.");
+                    continue;
+                }
+
+                switch (showType)
+                {
+                    case ShowType.ON_STATE:
+                        g.SetActive(state == appState);
+                        break;
+                    case ShowType.EXCLUDE_STATE:
+                        g.SetActive(state != appState);
+                        break;
+                    case ShowType.TO_STATE:
+                        g.SetActive(state <= appState);
+                        break;
+                    case ShowType.FROM_STATE:
+                        g.SetActive(state >= appState);
+                        break;
+                }
             }
         }
     }

@@ -27,7 +27,7 @@ namespace NSYNK.HyperSlides.Runtime
 
         public void Show()
         {
-            this.AnimateFloat(pointerRenderer.transform, Easing.Ease.EaseInOutQuad, 0, RuntimeHandler.Settings.pointerTransparency, 1f, 0, (float update) => pointerRenderer.sharedMaterial.SetFloat("_Transparency", update));
+            this.AnimateFloat(pointerRenderer.transform, Easing.Ease.EaseInOutQuad, 0, HyperSlidesStateManager.Instance.Settings.pointerTransparency, 1f, 0, (float update) => pointerRenderer.sharedMaterial.SetFloat("_Transparency", update));
 
             visualPointer.SetActive(true);
             pointerHitMarker.SetActive(true);

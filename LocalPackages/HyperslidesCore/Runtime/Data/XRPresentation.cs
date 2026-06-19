@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
+using NSYNK.HyperSlides.Network;
 using UnityEngine;
 
 namespace NSYNK.HyperSlides
@@ -19,8 +20,12 @@ namespace NSYNK.HyperSlides
         public object[] anchors;
         public string localeId;
 
-        public List<IContent> contents = new List<IContent>();
-        public List<XRSlide> slides;
+        public List<IContent> contents = new ();
+        public List<XRSlide> slides = new();
+
+        //Make transform overrides optional to support downward compatibility with older presentation formats that don't include them
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public List<XRNetworkObjects.SessionTransformOverride> transformOverrides = new();
 
         public static implicit operator bool(XRPresentation presentation) => presentation != null;
 
@@ -39,7 +44,7 @@ namespace NSYNK.HyperSlides
 
                 contents.Add(slide);
 
-                if(slide.triggers != null)
+                if (slide.triggers != null)
                     foreach (XRSlide.Trigger trigger in slide.triggers)
                         contents.Add(trigger);
             }

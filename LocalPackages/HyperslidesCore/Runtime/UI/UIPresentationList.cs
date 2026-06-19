@@ -20,16 +20,16 @@ namespace NSYNK.HyperSlides.UI
 
         private void OnEnable()
         {
-            XRDataManager.onDataReceived += UpdateDropdownOptions;
-            XRNetworkManager.onNetworkSlideUpdate += UpdateDropdownFromNetwork;
+            XRDataManager.Instance.OnDataReceived += UpdateDropdownOptions;
+            XRNetworkManager.Instance.OnNetworkSlideUpdate += UpdateDropdownFromNetwork;
 
             dropdown.onValueChanged.AddListener(delegate
             {
                 if (!triggerValueChange)
                     return;
 
-                XRSlideManager.SetPresentation(XRDataManager.allPresentations[dropdown.value]);
-                XRNetworkManager.Instance.SendSlideUpdate(XRDataManager.allPresentations[dropdown.value], 0);
+                XRSlideManager.Instance.SetPresentation(XRDataManager.Instance.AllPresentations[dropdown.value]);
+                XRNetworkManager.Instance.SendSlideUpdate(XRDataManager.Instance.AllPresentations[dropdown.value], 0);
             });
 
             UpdateDropdownFromNetwork(XRNetworkObjects.networkSessionState);
@@ -37,8 +37,8 @@ namespace NSYNK.HyperSlides.UI
 
         private void OnDisable()
         {
-            XRDataManager.onDataReceived -= UpdateDropdownOptions;
-            XRNetworkManager.onNetworkSlideUpdate -= UpdateDropdownFromNetwork;
+            XRDataManager.Instance.OnDataReceived -= UpdateDropdownOptions;
+            XRNetworkManager.Instance.OnNetworkSlideUpdate -= UpdateDropdownFromNetwork;
             dropdown.onValueChanged.RemoveAllListeners();
         }
 
@@ -48,7 +48,7 @@ namespace NSYNK.HyperSlides.UI
             {
                 UpdateDropdownOptions();
 
-                XRPresentation foundPresentation = XRDataManager.allPresentations.Find(p => p.id == networkObject.presentationId);
+                XRPresentation foundPresentation = XRDataManager.Instance.AllPresentations.Find(p => p.id == networkObject.presentationId);
                 TMP_Dropdown.OptionData foundOptionData = null;
 
                 if (foundPresentation != null)
@@ -67,7 +67,7 @@ namespace NSYNK.HyperSlides.UI
 
                 List<TMP_Dropdown.OptionData> newOptions = new();
 
-                foreach (XRPresentation xRPresentation in XRDataManager.allPresentations)
+                foreach (XRPresentation xRPresentation in XRDataManager.Instance.AllPresentations)
                     newOptions.Add(new TMP_Dropdown.OptionData(xRPresentation.title));
 
                 dropdown.AddOptions(newOptions);

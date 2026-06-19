@@ -4,20 +4,23 @@ using UnityEngine.XR.ARFoundation;
 
 namespace NSYNK.HyperSlides.XR
 {
+    /// <summary>
+    /// Class representing a world anchor in AR
+    /// </summary>
     public class XRWorldAnchor : MonoBehaviour
     {
-        public enum AnchorType
+        public enum WorldAnchorType
         {
             Default = 0,
             Position = 1,
             Rotation = 2
         }
 
-        public AnchorType anchorType = AnchorType.Default;
-        public GameObject visuals;
-        public GameObject personaPosition, personaRotation;
-        public GameObject buttonCanvas;
-        public TMPro.TextMeshPro idText;
+        public WorldAnchorType AnchorType = WorldAnchorType.Default;
+        public GameObject Visuals;
+        public GameObject MarkerPositionVisual, MarkerRotationVisual;
+        public GameObject ButtonCanvas;
+        public TMPro.TextMeshProUGUI ButtonText;
 
         [HideInInspector]
         public ARAnchor trackedAnchor;
@@ -26,7 +29,8 @@ namespace NSYNK.HyperSlides.XR
         public ARTrackable trackedImage;
 
         // trying to make it more generic so I can do custom logic for calculating the target position and rotation
-        struct TargetPositionRotation {
+        struct TargetPositionRotation
+        {
             public bool isSet;
             public Vector3 position;
             public Quaternion rotation;
@@ -35,23 +39,23 @@ namespace NSYNK.HyperSlides.XR
 
         private void Awake()
         {
-            personaPosition.SetActive(false);
-            personaRotation.SetActive(false);
+            MarkerPositionVisual.SetActive(false);
+            MarkerRotationVisual.SetActive(false);
         }
 
         private void OnEnable()
         {
-            if (!buttonCanvas.GetComponent<Canvas>().worldCamera)
-                buttonCanvas.GetComponent<Canvas>().worldCamera = Camera.main;
+            if (!ButtonCanvas.GetComponent<Canvas>().worldCamera)
+                ButtonCanvas.GetComponent<Canvas>().worldCamera = Camera.main;
         }
 
         public bool IsTracking()
         {
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors)
                 return trackedAnchor != null;
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Image)
-                return anchorType != AnchorType.Position || trackedImage != null || targetPositionRotation.isSet;
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Free)
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Image)
+                return AnchorType != WorldAnchorType.Position || trackedImage != null || targetPositionRotation.isSet;
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Free)
                 return true;
 
             return false;
@@ -75,7 +79,8 @@ namespace NSYNK.HyperSlides.XR
             trackedImage = trackable;
         }
         // Trying new method to set target Position and Rotation in a more generic way
-        public void UpdateTargetPositionLocation(Vector3 position, Quaternion rotation) {
+        public void UpdateTargetPositionLocation(Vector3 position, Quaternion rotation)
+        {
             targetPositionRotation.isSet = true;
             targetPositionRotation.position = position;
             targetPositionRotation.rotation = rotation;
@@ -87,7 +92,7 @@ namespace NSYNK.HyperSlides.XR
         /// <param name="anchor">The <see cref="ARAnchor"/> that has been found in the ARSession</param>
         public void UpdateAnchor(ARAnchor anchor)
         {
-            Debug.Log("Found anchor " + anchor.trackableId + " to " + anchorType);
+            Debug.Log("Found anchor " + anchor.trackableId + " to " + AnchorType);
             trackedAnchor = anchor;
             PrepareWorldAnchor();
             targetPositionRotation.isSet = false;
@@ -103,7 +108,7 @@ namespace NSYNK.HyperSlides.XR
             bool result = XRAnchorManager.Instance.arAnchorManager.TryRemoveAnchor(anchor);
             if (result)
             {
-                Debug.Log("Removed anchor on " + anchorType);
+                Debug.Log("Removed anchor on " + AnchorType);
                 trackedAnchor = null;
                 // Here PrepareWorldAnchor() is not doing anything, because of
                 // if (trackedImage == null || trackedAnchor == null)
@@ -112,7 +117,7 @@ namespace NSYNK.HyperSlides.XR
             }
             else
             {
-                Debug.LogWarning("Cant remove anchor on " + anchorType);
+                Debug.LogWarning("Cant remove anchor on " + AnchorType);
                 return;
             }
         }
@@ -127,7 +132,7 @@ namespace NSYNK.HyperSlides.XR
             var result = await XRAnchorManager.Instance.arAnchorManager.TryAddAnchorAsync(new Pose(transform.position, transform.rotation));
             if (result.status.IsSuccess())
             {
-                Debug.Log("Created anchor on " + anchorType);
+                Debug.Log("Created anchor on " + AnchorType);
                 trackedAnchor = result.value;
                 trackedAnchor.destroyOnRemoval = false;
                 PrepareWorldAnchor();
@@ -135,7 +140,7 @@ namespace NSYNK.HyperSlides.XR
             }
             else
             {
-                Debug.LogWarning("Cant create anchor on " + anchorType);
+                Debug.LogWarning("Cant create anchor on " + AnchorType);
                 return;
             }
         }
@@ -153,22 +158,23 @@ namespace NSYNK.HyperSlides.XR
 
             trackedImage = null;
 
-            XRAnchorManager.imageWorldAnchors.UpdateAnchorID(anchorType, trackedAnchor.trackableId.ToString());
+            XRAnchorManager.imageWorldAnchors.UpdateAnchorID(AnchorType, trackedAnchor.trackableId.ToString());
         }
 
         private void Update()
         {
 #if UNITY_VISIONOS
-            if (RuntimeHandler.Settings.showPersonaMarkersOnLobby)
+            if (HyperSlidesStateManager.Instance.Settings.showMarkerVisualsOnLobby)
             {
-                personaPosition.SetActive(anchorType == AnchorType.Position && XRNetworkManager.match == null);
-                personaRotation.SetActive(anchorType == AnchorType.Rotation && XRNetworkManager.match == null);
+                MarkerPositionVisual.SetActive(AnchorType == WorldAnchorType.Position && XRNetworkManager.Instance.Match == null);
+                MarkerRotationVisual.SetActive(AnchorType == WorldAnchorType.Rotation && XRNetworkManager.Instance.Match == null);
             }
 #endif
 
             if (!XRAnchorManager.arSupported)
             {
-                visuals.SetActive(false);
+                transform.SetPositionAndRotation(targetPositionRotation.position, targetPositionRotation.rotation);
+                Visuals.SetActive(false);
                 return;
             }
 
@@ -176,7 +182,7 @@ namespace NSYNK.HyperSlides.XR
 
             // Should not targetPosition and targetRotation be set in aranchormanager or only here
             // but not in both places, so there is less points of failure and confusion?
-            Vector3 targetPosition = anchorType == AnchorType.Rotation ? new Vector3(0,0,1) : Vector3.zero;
+            Vector3 targetPosition = AnchorType == WorldAnchorType.Rotation ? new Vector3(0, 0, 1) : Vector3.zero;
             Vector3 targetRotation = Vector3.zero;
 
             if (trackedImage)
@@ -185,7 +191,7 @@ namespace NSYNK.HyperSlides.XR
                 targetRotation = trackedImage.transform.rotation.eulerAngles;
             }
 
-            if (targetPositionRotation.isSet) 
+            if (targetPositionRotation.isSet)
             {
                 targetPosition = targetPositionRotation.position;
                 targetRotation = targetPositionRotation.rotation.eulerAngles;
@@ -194,18 +200,21 @@ namespace NSYNK.HyperSlides.XR
             if (trackedAnchor)
                 targetPosition = trackedAnchor.transform.position;
 
-            if (idText)
+            if (ButtonText)
             {
                 string imageState = trackedImage != null ? trackedImage.trackingState.ToString() : "No tracked image";
                 string imageId = trackedImage != null ? trackedImage.trackableId.ToString() : "";
                 string anchorState = trackedAnchor != null ? trackedAnchor.trackingState.ToString() : "No tracked anchor";
                 string anchorId = trackedAnchor != null ? trackedAnchor.trackableId.ToString() : "";
 
-                idText.text = anchorType +
-                    "\nImageID: " + imageId +
-                    "\nImage: " + imageState +
-                    "\nAnchorID: " + anchorId +
-                    "\nAnchor: " + anchorState;
+                if (UnityEngine.Debug.isDebugBuild)
+                    ButtonText.text = AnchorType +
+                        "\nImageID: " + imageId +
+                        "\nImage: " + imageState +
+                        "\nAnchorID: " + anchorId +
+                        "\nAnchor: " + anchorState;
+                else
+                    ButtonText.text = $"Place {AnchorType.ToString()} anchor";
             }
 
 #if !UNITY_IOS
@@ -216,12 +225,12 @@ namespace NSYNK.HyperSlides.XR
 
             transform.SetPositionAndRotation(targetPosition, Quaternion.Euler(targetRotation));
 
-            buttonCanvas.SetActive(!isTracking && RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors);
+            ButtonCanvas.SetActive(!isTracking && HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors);
 
-            if (anchorType == AnchorType.Rotation && RuntimeHandler.Settings.trackingType == Settings.TrackingType.Image)
-                visuals.SetActive(false);
+            if (AnchorType == WorldAnchorType.Rotation && HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Image)
+                Visuals.SetActive(false);
             else
-                visuals.SetActive(!isTracking || UnityEngine.Debug.isDebugBuild);
+                Visuals.SetActive(!isTracking || UnityEngine.Debug.isDebugBuild);
         }
     }
 }

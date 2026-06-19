@@ -11,7 +11,8 @@ namespace NSYNK.HyperSlides
             UnityEngine.Debug.Break();
         }
 
-        static public async Awaitable LogQueue(object message, Object context = null)
+        [HideInCallstack]
+        static public async Awaitable LogQueue(object message, UnityEngine.Object context = null)
         {
             await Awaitable.MainThreadAsync();
 
@@ -24,13 +25,38 @@ namespace NSYNK.HyperSlides
         [HideInCallstack]
         static public void Log(object message)
         {
+#if UNITY_EDITOR
             UnityEngine.Debug.Log(message);
+#else
+            CleanLog(message.ToString());
+#endif
         }
 
         [HideInCallstack]
         static public void Log(object message, Object context)
         {
+#if UNITY_EDITOR
             UnityEngine.Debug.Log($"<color=#{LogColor(context)}>{context}</color>\n{message}", context);
+#else
+            CleanLog(message.ToString());
+#endif
+        }
+
+        [HideInCallstack]
+        static public void Log(object message, System.Type type)
+        {
+#if UNITY_EDITOR
+            UnityEngine.Debug.Log($"<color=#{LogColorFromType(type)}>{type}</color>\n{message}", null);
+#else
+            CleanLog(message.ToString());
+#endif
+        }
+
+        static private void CleanLog(string message)
+        {
+            Application.SetStackTraceLogType(LogType.Log, StackTraceLogType.None);
+
+            UnityEngine.Debug.Log(message);
         }
 
         [HideInCallstack]
@@ -58,6 +84,12 @@ namespace NSYNK.HyperSlides
         }
 
         [HideInCallstack]
+        static public void LogError(object message, System.Type type)
+        {
+            UnityEngine.Debug.LogError($"<color=#{LogColorFromType(type)}>{type}</color>\n{message}", null);
+        }
+
+        [HideInCallstack]
         static public void DrawLine(Vector3 start, Vector3 end, Color color, float duration = 0.0F, bool depthTest = true)
         {
             UnityEngine.Debug.DrawLine(start, end, color, duration, depthTest);
@@ -66,12 +98,28 @@ namespace NSYNK.HyperSlides
         [HideInCallstack]
         public static string LogColor<T>(T caller)
         {
+            Color color = GetLogColor(caller.GetType());
+
+            return ColorUtility.ToHtmlStringRGB(color);
+        }
+
+        [HideInCallstack]
+        public static string LogColorFromType(System.Type callerType)
+        {
+            Color color = GetLogColor(callerType);
+
+            return ColorUtility.ToHtmlStringRGB(color);
+        }
+
+        [HideInCallstack]
+        public static Color GetLogColor(System.Type callerType)
+        {
             Color color = Color.white;
 
-            switch (caller.GetType().Namespace.ToString())
+            switch (callerType.Namespace.ToString())
             {
                 case "NSYNK.HyperSlides":
-                    color = new(0,204,102);
+                    color = new(0, 204, 102);
                     break;
                 case "NSYNK.HyperSlides.Core":
                     color = Color.cyan;
@@ -91,9 +139,12 @@ namespace NSYNK.HyperSlides
                 case "NSYNK.HyperSlides.Network.Communication":
                     color = Color.blue;
                     break;
+                case "NSYNK.HyperSlides.EditorScripts":
+                    color = Color.red;
+                    break;
             }
 
-            return ColorUtility.ToHtmlStringRGB(color);
+            return color;
         }
     }
 }

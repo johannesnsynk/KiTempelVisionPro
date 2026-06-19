@@ -17,18 +17,15 @@ namespace NSYNK.HyperSlides.Runtime
         [SerializeField] private float rotationJumpThreshold = 45f;
         [SerializeField] private float rotationIgnoreThreshold = 0.5f;
 
-        private NSYNK.KalmanFilter positionKalman;
-        private NSYNK.QuaternionKalmanFilter rotationKalman;
-        private bool filtersInitialized = false;
+        private KalmanFilter positionKalman;
+        private QuaternionKalmanFilter rotationKalman;
         private Vector3 lastFilteredPosition;
         private Quaternion lastFilteredRotation;
 
-        void Start()
-        {
 #if UNITY_IOS
-            InitializeFilters();
-#endif
-        }
+        private bool filtersInitialized = false;
+
+        void Start() => InitializeFilters();
 
         private void InitializeFilters()
         {
@@ -42,10 +39,11 @@ namespace NSYNK.HyperSlides.Runtime
             lastFilteredRotation = initialRotation;
             filtersInitialized = true;
         }
+#endif
 
         public void Update()
         {
-            if (DeviceInfo.Role == XRPlayer.Role.Simulation)
+            if (DeviceInfo.Instance.Role == XRPlayer.Role.Simulation)
             {
                 transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
                 return;
@@ -54,16 +52,17 @@ namespace NSYNK.HyperSlides.Runtime
             if (!filtersInitialized)
                 InitializeFilters();
 
-
-            transform.position = FilterPosition(XRAnchorManager.Instance.positionAnchor.transform.position);
-
-            transform.rotation = FilterRotation(GetTargetRotation());
+            if (!DeviceInfo.Instance.UseStandaloneSetup)
+            {
+                transform.position = FilterPosition(XRAnchorManager.Instance.positionAnchor.transform.position);
+                transform.rotation = FilterRotation(GetTargetRotation());
+            }
 #else
             transform.position = XRAnchorManager.Instance.positionAnchor.transform.position;
 
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors && XRAnchorManager.Instance.rotationAnchor.IsTracking())
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors && XRAnchorManager.Instance.rotationAnchor.IsTracking())
                 transform.LookAt(XRAnchorManager.Instance.rotationAnchor.transform.position);
-            else if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Image)
+            else if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Image)
                 transform.rotation = XRAnchorManager.Instance.positionAnchor.transform.rotation;
             else
                 transform.rotation = Quaternion.identity;
@@ -124,7 +123,7 @@ namespace NSYNK.HyperSlides.Runtime
 
         private Quaternion GetTargetRotation()
         {
-            if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Anchors && XRAnchorManager.Instance.rotationAnchor.IsTracking())
+            if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Anchors && XRAnchorManager.Instance.rotationAnchor.IsTracking())
             {
                 Vector3 lookDirection = XRAnchorManager.Instance.rotationAnchor.transform.position - transform.position;
                 if (lookDirection.magnitude > 0.001f)
@@ -134,10 +133,21 @@ namespace NSYNK.HyperSlides.Runtime
                     return Quaternion.LookRotation(1000f * lookDirection);
                 }
             }
-            else if (RuntimeHandler.Settings.trackingType == Settings.TrackingType.Image)
+            else if (HyperSlidesStateManager.Instance.Settings.trackingType == Settings.TrackingType.Image)
                 return XRAnchorManager.Instance.positionAnchor.transform.rotation;
             else
-                return Quaternion.identity;
+            {
+                Vector3 rotationAnchor = XRAnchorManager.Instance.rotationAnchor.transform.position;
+                Vector3 contentPosition = transform.position;
+                rotationAnchor.y = 0;
+                contentPosition.y = 0;
+
+                if (Mathf.Approximately(Vector3.Distance(rotationAnchor, contentPosition), 0f))
+                    return Quaternion.identity;
+
+                Quaternion lookDirection = Quaternion.LookRotation(rotationAnchor - contentPosition);
+                return lookDirection;
+            }
         }
     }
 }

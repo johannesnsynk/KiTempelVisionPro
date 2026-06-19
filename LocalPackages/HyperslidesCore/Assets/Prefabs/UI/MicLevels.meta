@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/HyperslidesCore/Packages/Nakama/Tests.meta
+guid: 09cb88e6a35484c73afde576a4ee868e
+========
 guid: 482c0d9e161fd2d4cbb5ed338e28111d
+>>>>>>>> development:Assets/HyperslidesCore/Assets/Prefabs/UI/MicLevels.meta
 folderAsset: yes
 DefaultImporter:
   externalObjects: {}

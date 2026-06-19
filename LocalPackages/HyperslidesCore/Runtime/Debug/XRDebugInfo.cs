@@ -1,5 +1,6 @@
 using UnityEngine;
 using TMPro;
+using System;
 
 namespace NSYNK.HyperSlides.Core.Utilities
 {
@@ -35,11 +36,14 @@ namespace NSYNK.HyperSlides.Core.Utilities
         private GameObject canvas;
         private bool showDebug = true;
         private TextMeshProUGUI debugInfoText;
+        private Network.NetworkSynced debugSyncedComp;
+        private DateTime lastUpdateTime;
 
         private void Awake()
         {
             canvas = GetComponentInChildren<Canvas>().gameObject;
             debugInfoText = GetComponentInChildren<TextMeshProUGUI>();
+            debugSyncedComp = debugObject.GetComponent<Network.NetworkSynced>();
         }
 
         private void OnEnable() => enableXRDebug += OnSwitchXRDebug;
@@ -65,13 +69,22 @@ namespace NSYNK.HyperSlides.Core.Utilities
 
             if (debugTransform)
             {
-                debugString += $"World Pos: {debugObject.transform.position}\nWorld Rot: {debugObject.transform.rotation}\nWorld Scale: {debugObject.transform.localScale}\n\n";
-                debugString += $"Local Pos: {debugObject.transform.localPosition}\nLocal Rot: {debugObject.transform.localRotation}\nLocal Scale: {debugObject.transform.localScale}";
+                debugString += $"Local Pos: {debugObject.transform.localPosition}";
             }
 
-            if (debugNetworkSync && debugObject.TryGetComponent(out Network.NetworkSynced syncedComp))
+            if (debugNetworkSync && debugSyncedComp)
             {
-                debugString += $"\n\nNetwork Synced Pos: {syncedComp.syncedTransform.localPosition}";
+                lastUpdateTime = debugSyncedComp.syncedTransform.timeStamp;
+                float latencyMilliseconds = (float)(DateTime.UtcNow - lastUpdateTime).TotalMilliseconds;
+
+                if (debugSyncedComp.syncedTransform.state == Network.XRNetworkObjects.NetworkSyncedTransform.NetworkState.AVAILABLE)
+                    latencyMilliseconds = 0f;
+
+                debugString += $"\n\nNETWORK SYNC: {debugSyncedComp.syncedTransform.guid}";
+                debugString += $"\nPos: {debugSyncedComp.syncedTransform.localPosition}";
+                debugString += $"\nOwner: {debugSyncedComp.syncedTransform.owner}";
+                debugString += $"\nState: {debugSyncedComp.syncedTransform.state}";
+                debugString += $"\nUpdate Latency: {latencyMilliseconds} ms";
             }
 
             debugInfoText.text = debugString;

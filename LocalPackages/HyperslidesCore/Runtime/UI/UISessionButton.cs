@@ -20,22 +20,33 @@ namespace NSYNK.HyperSlides.UI
         private UnityWebRequest www;
         private UIButton uIButton;
 
-        void OnEnable()
-        {
-            uIButton = GetComponent<UIButton>();
-        }
+        void OnEnable() => uIButton = GetComponent<UIButton>();
 
         public void Init(IApiMatch match)
         {
             XRNetworkObjects.MatchLabel matchLabel = JsonUtility.FromJson<XRNetworkObjects.MatchLabel>(match.Label);
             sessionName.text = string.IsNullOrEmpty(matchLabel.name) ? match.MatchId : matchLabel.name;
+            string sessionId = match != null ? match.MatchId : "";
 
-            uIButton.onClick.AddListener(() => HyperSlidesStateManager.UpdateAppState(HyperSlidesStateManager.AppState.JOIN_SESSION, match.MatchId));
+            uIButton.onClick.AddListener(() => XRNetworkManager.Instance.UpdateNetworkState(XRNetworkManager.NetworkState.JOINING, match.MatchId));
 
-            XRPresentation foundPresentation = XRDataManager.allPresentations.Find(p => p.id == matchLabel.presentationId);
+            XRPresentation foundPresentation = XRDataManager.Instance.AllPresentations.Find(p => p.id == matchLabel.presentationId);
 
             if (foundPresentation && !string.IsNullOrEmpty(foundPresentation.cover))
                 StartCoroutine(GetPresentationCover(foundPresentation.cover));
+        }
+
+        public void Init(string sessionNameText)
+        {
+            sessionName.text = sessionNameText;
+
+            uIButton.onClick.AddListener(() =>
+            {
+                XRNetworkManager.Instance.UpdateNetworkState(XRNetworkManager.NetworkState.DISCONNECT);
+                HyperSlidesStateManager.Instance.UpdateAppState(HyperSlidesStateManager.AppState.STARTING);
+            });
+            
+            sphereMeshRenderer.material.SetColor("_BaseColor", Color.red);
         }
 
         public void OnDestroy()

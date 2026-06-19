@@ -14,7 +14,7 @@ namespace NSYNK.HyperSlides.Runtime
     /// <summary>
     /// Handles loading of remote assets from a server, caching them locally.
     /// </summary>
-    public class RemoteAssetLoader : MonoBehaviour
+    public class RemoteAssetLoader : Singleton<RemoteAssetLoader>
     {
         public string serverURL = "https://minio.nsynk.de/hyperslides/assets";
 
@@ -28,6 +28,13 @@ namespace NSYNK.HyperSlides.Runtime
         [Serializable]
         public class PresentationAssetPair
         {
+            public PresentationAssetPair(string projectName, string catalogName, string assetKey)
+            {
+                this.projectName = projectName;
+                this.catalogName = catalogName;
+                this.assetKey = assetKey;
+            }
+
             public string projectName = "";
             public string catalogName = "";
             public string assetKey = "";
@@ -85,7 +92,7 @@ namespace NSYNK.HyperSlides.Runtime
             }
         }
 
-        public async Task<object> LoadPresentation(PresentationAssetPair pair)
+        public async Task<object> LoadPresentation(PresentationAssetPair pair, bool forceUpdate = false)
         {
             try
             {
@@ -96,7 +103,13 @@ namespace NSYNK.HyperSlides.Runtime
 
                 localCatalogPath = $"{projectPath}/{pair.catalogName}";
 
-                if (File.Exists(localCatalogPath) && fakeOffline)
+                bool localCatalogPathExists = File.Exists(localCatalogPath);
+
+                Debug.Log($"Local catalog path: {localCatalogPath} exists {localCatalogPathExists}", this);
+
+                bool isOffline = Application.internetReachability == NetworkReachability.NotReachable || fakeOffline;
+
+                if (isOffline)
                 {
                     Debug.Log("Loading cached catalog", this);
                     await LoadCatalog(localCatalogPath);
@@ -133,6 +146,8 @@ namespace NSYNK.HyperSlides.Runtime
         {
             using (UnityEngine.Networking.UnityWebRequest request = UnityEngine.Networking.UnityWebRequest.Get(url))
             {
+                request.timeout = 5;
+
                 var operation = request.SendWebRequest();
                 while (!operation.isDone)
                 {
@@ -141,7 +156,13 @@ namespace NSYNK.HyperSlides.Runtime
 
                 if (request.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
                 {
-                    Debug.LogWarning($"Failed to download catalog: {request.error}", this);
+                    Debug.LogWarning($"Failed to download catalog: {request.error}, trying to load from cache.", this);
+                    
+                    if (string.IsNullOrEmpty(localCatalogPath) || !File.Exists(localCatalogPath))
+                        Debug.LogError("No cached catalog available.", this);
+                    else
+                        await LoadCatalog(localCatalogPath);
+                        
                     return;
                 }
 

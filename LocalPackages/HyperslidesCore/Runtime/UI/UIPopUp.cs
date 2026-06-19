@@ -14,10 +14,8 @@ namespace NSYNK.HyperSlides.UI
 
         private Canvas canvas;
 
-        public override void Awake()
+        protected override void OnSingletonAwake()
         {
-            base.Awake();
-
             // uiContent.SetActive(false);
             canvas = GetComponent<Canvas>();
             canvas.worldCamera = Camera.main;
@@ -25,21 +23,29 @@ namespace NSYNK.HyperSlides.UI
 
         public async Task<bool> WaitForUserInput(string message)
         {
-            userConfirmation = UserConfirmation.WAITING;
+            try
+            {
+                userConfirmation = UserConfirmation.WAITING;
 
-            // canvas.GetComponent<GraphicRaycaster>().enabled = true;
-            promptTextfield.text = message;
+                // canvas.GetComponent<GraphicRaycaster>().enabled = true;
+                promptTextfield.text = message;
 
-            while (userConfirmation == UserConfirmation.WAITING)
-                await Task.Yield();
+                while (userConfirmation == UserConfirmation.WAITING)
+                    await Task.Yield();
 
-            // canvas.GetComponent<GraphicRaycaster>().enabled = false;
-            promptTextfield.text = "";
+                // canvas.GetComponent<GraphicRaycaster>().enabled = false;
+                promptTextfield.text = "";
 
-            bool confirmed = userConfirmation == UserConfirmation.CONFIRMED;
-            userConfirmation = UserConfirmation.INACTIVE;
+                bool confirmed = userConfirmation == UserConfirmation.CONFIRMED;
+                userConfirmation = UserConfirmation.INACTIVE;
 
-            return confirmed;
+                return confirmed;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"Error in WaitForUserInput: {ex}");
+                return true;
+            }
         }
 
         public void Confirm(bool confirm) {

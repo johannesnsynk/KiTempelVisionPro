@@ -24,7 +24,7 @@ namespace NSYNK.HyperSlides.XR
     {
         public TextMeshProUGUI worldmapText;
 
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
         public static ARWorldMap worldMap = new ARWorldMap();
         public static ARKitSessionSubsystem sessionSubsystem;
         public static int scanAttempts = 0;
@@ -114,6 +114,12 @@ namespace NSYNK.HyperSlides.XR
 
         static void SaveAndDisposeWorldMap(string savePath)
         {
+            if (!worldMap.valid)
+            {
+                Debug.Log("No valid worldmap to save");
+                return;
+            }
+            
             var data = worldMap.Serialize(Allocator.Temp);
             var file = File.Open(savePath, FileMode.Create);
             var writer = new BinaryWriter(file);

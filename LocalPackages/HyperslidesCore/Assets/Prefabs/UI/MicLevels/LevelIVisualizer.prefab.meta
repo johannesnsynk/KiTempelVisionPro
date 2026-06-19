@@ -1,5 +1,9 @@
 fileFormatVersion: 2
+<<<<<<<< HEAD:Assets/HyperslidesCore/Assets/Prefabs/Debug/RuntimeDebug.prefab.meta
+guid: 494c699c9ce0e467a9da50b6b75749b0
+========
 guid: cc19728294f9e2b49949f3d50ef6f66b
+>>>>>>>> development:Assets/HyperslidesCore/Assets/Prefabs/UI/MicLevels/LevelIVisualizer.prefab.meta
 PrefabImporter:
   externalObjects: {}
   userData: 

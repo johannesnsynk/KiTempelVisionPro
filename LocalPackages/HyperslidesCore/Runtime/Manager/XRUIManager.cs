@@ -19,18 +19,24 @@ namespace NSYNK.HyperSlides.UI
     {
         public static Timer timer = new();
         public static Timer dissolveTimer = new();
-        public Transform palmUIRoot;
-        public Transform headUIRoot;
-        public Transform stationaryUIRoot;
-        public Material uiMaterial;
+        public Transform StationaryUIRoot;
+        [ReadOnly]
+        public Transform dynamicUIRoot;
 
-        public GameObject setupUI;
-        public GameObject matchMakerUI;
-        public GameObject moderatorUI;
-        public GameObject moderatorHeadUI;
-        public GameObject popUPUI;
-        public GameObject moderatorNotesUI;
-        public GameObject participantUI;
+        [SerializeField]
+        private GameObject setupUI;
+        [SerializeField]
+        private GameObject matchMakerUI;
+        [SerializeField]
+        private GameObject moderatorUI;
+        [SerializeField]
+        private GameObject moderatorHeadUI;
+        [SerializeField]
+        private GameObject popUPUI;
+        [SerializeField]
+        private GameObject moderatorNotesUI;
+        [SerializeField]
+        private GameObject participantUI;
 
         private GameObject setupUIRuntime;
         private GameObject matchMakerUIRuntime;
@@ -39,34 +45,27 @@ namespace NSYNK.HyperSlides.UI
         private GameObject popUPUIRuntime;
         private GameObject moderatorNotesUIRuntime;
         private GameObject participantUIRuntime;
+        private Dictionary<GameObject, bool> uiLastState = new();
 
-        private Dictionary<GameObject, bool> uiLastState = new Dictionary<GameObject, bool>();
-
-        private bool loadingActionInProgress = false;
-        private float loadingActionProgress = 0;
-
-        public bool LoadingActionInProgress
+        protected override void OnSingletonAwake()
         {
-            get => loadingActionInProgress;
-            set
-            {
-                loadingActionInProgress = value;
-            }
+            base.OnSingletonAwake();
+
+            CreateDynamicRoot();
         }
-        public float LoadingActionProgress
+
+        private void CreateDynamicRoot()
         {
-            get => loadingActionProgress;
-            set
-            {
-                loadingActionProgress = value;
-                UIButton.onUpdateUI?.Invoke();
-            }
+            dynamicUIRoot = new GameObject("DynamicUIRoot").transform;
+            dynamicUIRoot.SetParent(transform.parent);
+            dynamicUIRoot.localPosition = Vector3.zero;
+            dynamicUIRoot.localRotation = Quaternion.identity;
         }
 
         private void OnEnable()
         {
 #if UNITY_EDITOR || UNITY_STANDALONE
-            stationaryUIRoot.transform.localPosition = new Vector3(0, 0, 1);
+            StationaryUIRoot.transform.localPosition = new Vector3(0, 0, 1);
 #endif
         }
 
@@ -136,7 +135,7 @@ namespace NSYNK.HyperSlides.UI
             HideAll();
 
             if (!setupUIRuntime)
-                setupUIRuntime = Instantiate(setupUI, stationaryUIRoot, false);
+                setupUIRuntime = Instantiate(setupUI, StationaryUIRoot, false);
             else
                 setupUIRuntime.SetActive(true);
         }
@@ -148,25 +147,17 @@ namespace NSYNK.HyperSlides.UI
         {
             HideAll();
 
-            palmUIRoot.gameObject.SetActive(true);
-            headUIRoot.gameObject.SetActive(true);
+            dynamicUIRoot.gameObject.SetActive(true);
 
             if (!matchMakerUIRuntime)
-                matchMakerUIRuntime = Instantiate(matchMakerUI, stationaryUIRoot, false);
+                matchMakerUIRuntime = Instantiate(matchMakerUI, StationaryUIRoot, false);
             else
                 matchMakerUIRuntime.SetActive(true);
 
             if (!setupUIRuntime)
-                setupUIRuntime = Instantiate(setupUI, stationaryUIRoot, false);
+                setupUIRuntime = Instantiate(setupUI, StationaryUIRoot, false);
 
             setupUIRuntime.SetActive(false);
-
-            //Maybe use this later for always on top materials
-            //matchMakerUIRuntime.GetComponentsInChildren<UnityEngine.UI.ILayoutElement>().ToList().ForEach(element =>
-            //{
-            //if (element.GetType().GetProperty("material") != null)
-            //    element.GetType().GetProperty("material").SetValue(element, uiMaterial);
-            //});
 
             matchMakerUIRuntime.GetComponent<Canvas>().worldCamera = Camera.main;
         }
@@ -185,23 +176,22 @@ namespace NSYNK.HyperSlides.UI
                 return;
             }
 
-            headUIRoot.gameObject.SetActive(false);
-            palmUIRoot.gameObject.SetActive(false);
+            dynamicUIRoot.gameObject.SetActive(false);
 
-            if (DeviceInfo.Role != XRPlayer.Role.Moderator)
+            if (DeviceInfo.Instance.Role != XRPlayer.Role.Moderator)
                 return;
 
             if (!moderatorUIRuntime)
             {
-                if (DeviceInfo.IsXRDevice())
+                if (DeviceInfo.Instance.IsXRDevice())
                 {
-                    moderatorUIRuntime = Instantiate(moderatorUI, palmUIRoot, false);
+                    moderatorUIRuntime = Instantiate(moderatorUI, dynamicUIRoot, false);
 
                     //Divide by 1000 because Unity UI
-                    moderatorUIRuntime.transform.localScale = Vector3.one / 1000 * RuntimeHandler.Settings.uiHandScale;
+                    moderatorUIRuntime.transform.localScale = Vector3.one / 1000 * HyperSlidesStateManager.Instance.Settings.uiHandScale;
                 }
                 else
-                    moderatorUIRuntime = Instantiate(moderatorUI, headUIRoot, false);
+                    moderatorUIRuntime = Instantiate(moderatorUI, dynamicUIRoot, false);
 
                 if (moderatorUIRuntime.TryGetComponent(out Canvas canvas))
                     canvas.worldCamera = Camera.main;
@@ -209,7 +199,7 @@ namespace NSYNK.HyperSlides.UI
 
             if (!moderatorHeadUIRuntime)
             {
-                moderatorHeadUIRuntime = Instantiate(moderatorHeadUI, headUIRoot, false);
+                moderatorHeadUIRuntime = Instantiate(moderatorHeadUI, dynamicUIRoot, false);
 
                 if (moderatorHeadUIRuntime.TryGetComponent(out Canvas canvas))
                     canvas.worldCamera = Camera.main;
@@ -218,7 +208,9 @@ namespace NSYNK.HyperSlides.UI
             moderatorUIRuntime.SetActive(true);
             moderatorHeadUIRuntime.SetActive(true);
 
+#if UNITY_VISIONOS
             ShowModeratorNotesUI();
+#endif
         }
 
         /// <summary>
@@ -228,7 +220,7 @@ namespace NSYNK.HyperSlides.UI
         {
             if (Instance.moderatorNotesUIRuntime == null)
             {
-                var newPosition = XRTrackedUser.Instance.Rotation() * RuntimeHandler.Settings.uiPresenterNotesOffset;
+                var newPosition = XRTrackedUser.Instance.Rotation() * HyperSlidesStateManager.Instance.Settings.uiPresenterNotesOffset;
                 Vector3 moderatorNotesPosition = XRTrackedUser.Instance.Position() + newPosition;
 
                 var target = moderatorNotesPosition - XRTrackedUser.Instance.Position();
@@ -243,7 +235,7 @@ namespace NSYNK.HyperSlides.UI
             {
                 moderatorNotesUIRuntime.SetActive(true);
 
-                var newPosition = XRTrackedUser.Instance.Rotation() * RuntimeHandler.Settings.uiPresenterNotesOffset;
+                var newPosition = XRTrackedUser.Instance.Rotation() * HyperSlidesStateManager.Instance.Settings.uiPresenterNotesOffset;
                 Instance.moderatorNotesUIRuntime.transform.position = XRTrackedUser.Instance.Position() + newPosition;
 
                 var target = Instance.moderatorNotesUIRuntime.transform.position - XRTrackedUser.Instance.Position();
@@ -257,14 +249,14 @@ namespace NSYNK.HyperSlides.UI
         public void HideModeratorNotesUI()
         {
             if (Instance.moderatorNotesUIRuntime != null)
-                Destroy(Instance.moderatorNotesUIRuntime.gameObject);
+                Destroy(Instance.moderatorNotesUIRuntime);
             Instance.moderatorNotesUIRuntime = null;
         }
 
         //private void Update()
         //{
-        //    uiRoot.position = Vector3.Lerp(uiRoot.position, XRTrackedUser.instance.Position() + XRTrackedUser.instance.Forward() * 2, Time.deltaTime * RuntimeHandler.Settings.uiFollowEasing);
-        //    uiRoot.rotation = Quaternion.Lerp(uiRoot.rotation, XRTrackedUser.instance.Rotation(), Time.deltaTime * RuntimeHandler.Settings.uiFollowEasing);
+        //    uiRoot.position = Vector3.Lerp(uiRoot.position, XRTrackedUser.instance.Position() + XRTrackedUser.instance.Forward() * 2, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiFollowEasing);
+        //    uiRoot.rotation = Quaternion.Lerp(uiRoot.rotation, XRTrackedUser.instance.Rotation(), Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiFollowEasing);
         //}
 
         public void ShowParticipantUI() => HandleParticipantUI(true);
@@ -276,7 +268,7 @@ namespace NSYNK.HyperSlides.UI
         /// <param name="show">Show the panel?</param>
         private void HandleParticipantUI(bool show)
         {
-            if (XRNetworkManager.localPlayer && DeviceInfo.Role == XRPlayer.Role.Moderator)
+            if (XRNetworkManager.Instance.LocalPlayer && DeviceInfo.Instance.Role == XRPlayer.Role.Moderator)
             {
                 ShowModeratorNotesUI();
                 return;
@@ -286,7 +278,7 @@ namespace NSYNK.HyperSlides.UI
                 // if (RuntimeHandler.isRealDevice)
                 //     participantUIRuntime = Instantiate(participantUI, palmUIRoot, false);
                 // else
-                participantUIRuntime = Instantiate(participantUI, headUIRoot, false);
+                participantUIRuntime = Instantiate(participantUI, dynamicUIRoot, false);
 
             participantUIRuntime.SetActive(show);
         }
@@ -302,12 +294,12 @@ namespace NSYNK.HyperSlides.UI
 
 #if UNITY_VISIONOS
             if (Instance.popUPUIRuntime == null)
-                Instance.popUPUIRuntime = Instantiate(Instance.popUPUI, Instance.stationaryUIRoot);
+                Instance.popUPUIRuntime = Instantiate(Instance.popUPUI, Instance.StationaryUIRoot);
 #else
             if (Instance.popUPUIRuntime == null)
-                Instance.popUPUIRuntime = Instantiate(Instance.popUPUI, Instance.headUIRoot);
-
+                Instance.popUPUIRuntime = Instantiate(Instance.popUPUI, Instance.dynamicUIRoot);
 #endif
+            Instance.dynamicUIRoot.gameObject.SetActive(true);
             Instance.popUPUIRuntime.SetActive(true);
 
             Instance.popUPUIRuntime.transform.localPosition = new Vector3(0, 0, -0.25f);
@@ -318,6 +310,7 @@ namespace NSYNK.HyperSlides.UI
             await waitForUser;
 
             Instance.popUPUIRuntime.SetActive(false);
+            Instance.dynamicUIRoot.gameObject.SetActive(false);
 
             Instance.RestoreLastUIState();
 
@@ -327,27 +320,19 @@ namespace NSYNK.HyperSlides.UI
         /// <summary>
         /// Show the moderator UI
         /// </summary>
-        public void ShowModeratorUI()
-        {
-            palmUIRoot.gameObject.SetActive(true);
-            headUIRoot.gameObject.SetActive(true);
-        }
+        public void ShowModeratorUI() => dynamicUIRoot.gameObject.SetActive(true);
 
         /// <summary>
         /// Hide the moderator UI
         /// </summary>
-        public void HideModeratorUI()
-        {
-            palmUIRoot.gameObject.SetActive(false);
-            headUIRoot.gameObject.SetActive(false);
-        }
+        public void HideModeratorUI() => dynamicUIRoot.gameObject.SetActive(false);
 
         private void LateUpdate()
         {
-            if (XRHandPalm.Left && DeviceInfo.IsXRDevice())
+            if (XRHandPalm.Left && DeviceInfo.Instance.IsXRDevice())
                 MoveUIToHand();
 
-            MoveUIToUserHead();
+            // MoveUIToUserHead();
 #if UNITY_IOS || UNITY_STANDALONE || UNITY_EDITOR
             MoveStationaryToUserFront();
 #endif
@@ -373,9 +358,11 @@ namespace NSYNK.HyperSlides.UI
             Vector3 lookPos = XRTrackedUser.Instance.Position() - targetPos;
             lookPos.y = 0;
 
-            Instance.stationaryUIRoot.position = targetPos;
-            Instance.stationaryUIRoot.rotation = Quaternion.LookRotation(lookPos);
-            Instance.stationaryUIRoot.Rotate(0, 180, 0);
+            StationaryUIRoot.SetPositionAndRotation(targetPos, Quaternion.LookRotation(lookPos));
+            StationaryUIRoot.Rotate(0, 180, 0);
+
+            dynamicUIRoot.SetPositionAndRotation(targetPos, Quaternion.LookRotation(lookPos));
+            dynamicUIRoot.Rotate(0, 180, 0);
         }
 
         /// <summary>
@@ -383,15 +370,15 @@ namespace NSYNK.HyperSlides.UI
         /// </summary>
         private void MoveUIToUserHead()
         {
-            if (!headUIRoot.gameObject.activeInHierarchy)
-                headUIRoot.gameObject.SetActive(true);
+            if (!dynamicUIRoot.gameObject.activeInHierarchy)
+                dynamicUIRoot.gameObject.SetActive(true);
 
-            headUIRoot.localScale = Vector3.one * RuntimeHandler.Settings.uiHeadScale;
+            dynamicUIRoot.localScale = Vector3.one * HyperSlidesStateManager.Instance.Settings.uiHeadScale;
 
-            //headUIRoot.position = Vector3.Lerp(headUIRoot.position, XRTrackedUser.Instance.Position() + XRTrackedUser.Instance.Forward() * RuntimeHandler.Settings.uiHeadDistance, Time.deltaTime * RuntimeHandler.Settings.uiFollowEasing);
-            //headUIRoot.rotation = Quaternion.Lerp(headUIRoot.rotation, XRTrackedUser.Instance.Rotation(), Time.deltaTime * RuntimeHandler.Settings.uiRotateEasing);
+            //headUIRoot.position = Vector3.Lerp(headUIRoot.position, XRTrackedUser.Instance.Position() + XRTrackedUser.Instance.Forward() * HyperSlidesStateManager.Instance.Settings.uiHeadDistance, Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiFollowEasing);
+            //headUIRoot.rotation = Quaternion.Lerp(headUIRoot.rotation, XRTrackedUser.Instance.Rotation(), Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiRotateEasing);
 
-            headUIRoot.SetPositionAndRotation(XRTrackedUser.Instance.Position() + XRTrackedUser.Instance.Forward() * RuntimeHandler.Settings.uiHeadDistance, XRTrackedUser.Instance.Rotation());
+            dynamicUIRoot.SetPositionAndRotation(XRTrackedUser.Instance.Position() + XRTrackedUser.Instance.Forward() * HyperSlidesStateManager.Instance.Settings.uiHeadDistance, XRTrackedUser.Instance.Rotation());
         }
 
         /// <summary>
@@ -401,24 +388,24 @@ namespace NSYNK.HyperSlides.UI
         {
             if (moderatorUIRuntime)
             {
-                Vector3 targetPos = new Vector3(RuntimeHandler.Settings.uiHandOffset.x, RuntimeHandler.Settings.uiHandOffset.y, RuntimeHandler.Settings.uiHandOffset.z);
+                Vector3 targetPos = new Vector3(HyperSlidesStateManager.Instance.Settings.uiHandOffset.x, HyperSlidesStateManager.Instance.Settings.uiHandOffset.y, HyperSlidesStateManager.Instance.Settings.uiHandOffset.z);
 
                 moderatorUIRuntime.transform.localPosition =
                 Vector3.Lerp(
                     moderatorUIRuntime.transform.localPosition,
                     targetPos,
-                    Time.deltaTime * RuntimeHandler.Settings.uiFollowEasing
+                    Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiFollowEasing
                     );
 
                 moderatorUIRuntime.transform.LookAt(XRTrackedUser.Instance.Position());
                 moderatorUIRuntime.transform.Rotate(0, 180, 0, Space.Self);
             }
 
-            palmUIRoot.transform.position =
+            dynamicUIRoot.transform.position =
             Vector3.Lerp(
-                palmUIRoot.transform.position,
+                dynamicUIRoot.transform.position,
                 XRHandPalm.Left.transform.position,
-                Time.deltaTime * RuntimeHandler.Settings.uiFollowEasing
+                Time.deltaTime * HyperSlidesStateManager.Instance.Settings.uiFollowEasing
                 );
         }
 
@@ -431,7 +418,7 @@ namespace NSYNK.HyperSlides.UI
             if (!currentTimer.Enabled || currentTimer.Interval < timeout * 1000)
             {
                 currentTimer.Stop();
-                currentTimer.Interval = (timeout > 0 ? timeout : RuntimeHandler.Settings.uiTimeout) * 1000;
+                currentTimer.Interval = (timeout > 0 ? timeout : HyperSlidesStateManager.Instance.Settings.uiTimeout) * 1000;
                 currentTimer.Start();
                 currentTimer.AutoReset = false;
                 currentTimer.Enabled = true;

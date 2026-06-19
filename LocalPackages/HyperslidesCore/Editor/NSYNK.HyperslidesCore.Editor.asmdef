@@ -1,5 +1,5 @@
 {
-    "name": "NSYNK.Hyperslides.Editor",
+    "name": "NSYNK.HyperSlides.Editor",
     "rootNamespace": "",
     "references": [
         "Unity.XR.ARFoundation",
@@ -10,7 +10,7 @@
         "Unity.TextMeshPro",
         "NakamaRuntime",
         "NakamaEditor",
-        "NSYNK.Hyperslides.Runtime",
+        "NSYNK.HyperSlides.Runtime",
         "Unity.Addressables.Editor",
         "Unity.Addressables",
         "Unity.ResourceManager"
@@ -22,7 +22,7 @@
     "allowUnsafeCode": false,
     "overrideReferences": false,
     "precompiledReferences": [],
-    "autoReferenced": false,
+    "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],
     "noEngineReferences": false

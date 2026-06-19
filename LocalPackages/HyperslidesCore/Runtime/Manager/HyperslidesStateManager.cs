@@ -1,3 +1,5 @@
+using Nakama;
+using Newtonsoft.Json.Linq;
 using NSYNK.HyperSlides.Core;
 using NSYNK.HyperSlides.Network;
 using NSYNK.HyperSlides.Runtime;
@@ -6,41 +8,94 @@ using NSYNK.HyperSlides.XR;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.UI;
 using UnityMainThreadDispatcher;
+
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace NSYNK.HyperSlides
 {
     public class HyperSlidesStateManager : Singleton<HyperSlidesStateManager>
     {
-        public static CancellationTokenSource tokenSource;
-        public static StateUpdate stateUpdate;
+        public CancellationTokenSource tokenSource;
+        public event Action<AppState> OnStateUpdate;
 
-        public delegate void StateUpdate(AppState state);
+        /// <summary>Current app state</summary>
+        [ReadOnly]
+        public AppState CurrentAppState;
+
+        /// <summary>
+        /// Settings for the HyperSlides application
+        /// </summary>
+        [SerializeField]
+        private Settings _settings;
+        public Settings Settings
+        {
+            get
+            {
+                if (Instance)
+                    return Instance._settings;
+                else
+                    return null;
+            }
+            set
+            {
+                Instance._settings = value;
+            }
+        }
+
+        public enum ServerConnectionProfile
+        {
+            local = -2,
+            custom = -1,
+            eu = 0,
+            sin = 1
+        }
+
+        [Header("Server Connection Profiles")]
+        public ServerConnectionProfile EditorServerConnectionProfile = ServerConnectionProfile.eu;
+        public List<ServerConnection> ServerConnections = new();
+        [ReadOnly]
+        public ServerConnection CurrentServerConnection = null;
 
         [Header("UI Status Objects")]
         public TMPro.TextMeshProUGUI statusText;
         public TMPro.TMP_InputField inputField;
         public GameObject loadingIconHolder, loadingIndicator, loadingDoneIndicator, statusRoot;
-        public UnityEngine.UI.Image loadingIcon;
+        public Image loadingIcon;
         public List<AppStateIcon> appStateIcons;
 
+        [Header("Interaction Button Prefab")]
+        public UIButton interactionButton;
+
+        [ReadOnly]
+        public string CurrentVersion = "Not defined";
+        [HideInInspector]
+        public bool ShowVersionOverlay = false;
+
+        /// <summary>
+        /// The different app states for the HyperSlides application
+        /// </summary>
         public enum AppState
         {
             STARTING = 0, // App is starting
-            PLATFORMCHECK = 100, // App is checking for platform and sets up correct scenes and prefabs
             DEVICE_SETUP = 200, // Setting up the device XR/AR settings and checking for tracking capabilities
             CONNECTION_SETUP = 300, // Setting up the connection to the server/backend to fetch or register user data
-            MATCHMAKING = 400, // Handle the view of session matchmaking or the autoconnect to the first session available
-            JOIN_SESSION = 500, // Device will join a session
-            ACTIVE_SESSION = 600, // Device has joined a session
+            RUNNING = 400, // Handle the view of session matchmaking or the autoconnect to the first session available
             ERROR = 1000, // If any known error occurs, stop the system and idle in error state
         }
 
+        /// <summary>
+        /// The loading state for the current operation
+        /// </summary>
         public enum LoadingState
         {
             NONE = 0,
@@ -48,23 +103,108 @@ namespace NSYNK.HyperSlides
             DONE = 2
         }
 
-        [Serializable]
-        public class AppStateIcon
+        /// <summary>Exception that caused the error state</summary>
+        private Exception exception;
+        /// <summary>List of currently shown interaction buttons</summary>
+        private List<UIButton> interactionButtons = new List<UIButton>();
+        /// <summary>Stored settings for editor runtime changes</summary>
+        private Settings storedSettings;
+
+        void OnEnable()
         {
-            public AppState state;
-            public Sprite icon;
+#if UNITY_EDITOR
+            Instance.storedSettings = Instantiate(Settings);
+            Settings = Instance.storedSettings;
+#endif
+
+            XRNetworkManager.Instance.OnSettingOverride += HandleCustomNotification;
         }
 
-        public static Exception exception;
-        public static AppState appState;
-        public AppState inspectorAppState = AppState.STARTING;
+        void OnDisable()
+        {
+            RemoveAllButtonInteractions();
+
+            if (XRNetworkManager.Instance == null)
+                return;
+
+            XRNetworkManager.Instance.OnSettingOverride -= HandleCustomNotification;
+        }
+
+        void OnGUI()
+        {
+#if UNITY_EDITOR
+            ShowVersionOverlay = true;
+#endif
+
+            if (ShowVersionOverlay)
+            {
+                //Show the version of bottom right screen
+                GUIStyle style = new GUIStyle(GUI.skin.label);
+                style.fontSize = 20;
+                style.normal.textColor = Color.white;
+                Vector2 size = style.CalcSize(new GUIContent(CurrentVersion));
+                GUI.Label(new Rect(Screen.width - size.x - 10, Screen.height - size.y - 10, size.x, size.y), CurrentVersion, style);
+            }
+        }
+
+#if UNITY_EDITOR
+        void OnValidate()
+        {
+            //Get package version from package.json file
+            string packagePath = GetPackageJsonPath();
+            if (System.IO.File.Exists(packagePath))
+            {
+                string json = System.IO.File.ReadAllText(packagePath);
+                JObject packageObj = JObject.Parse(json);
+                string version = packageObj["version"]?.Value<string>();
+
+                if (version != null)
+                    CurrentVersion = version;
+            }
+        }
+
+        private string GetPackageJsonPath()
+        {
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssembly(GetType().Assembly);
+            if (packageInfo != null)
+                return System.IO.Path.Combine(packageInfo.resolvedPath, "package.json");
+
+            MonoScript script = MonoScript.FromMonoBehaviour(this);
+            string scriptAssetPath = AssetDatabase.GetAssetPath(script);
+
+            if (string.IsNullOrEmpty(scriptAssetPath))
+                return string.Empty;
+
+            var directory = new System.IO.DirectoryInfo(System.IO.Path.GetDirectoryName(scriptAssetPath)!);
+
+            while (directory != null)
+            {
+                string candidatePath = System.IO.Path.Combine(directory.FullName, "package.json");
+                if (System.IO.File.Exists(candidatePath))
+                    return candidatePath;
+
+                directory = directory.Parent;
+            }
+
+            return string.Empty;
+        }
+#endif
+
+        protected override void OnSingletonAwake()
+        {
+            base.OnSingletonAwake();
+
+#if UNITY_EDITOR
+            SetServerConnection(EditorServerConnectionProfile.ToString());
+#endif
+        }
 
         private void Start()
         {
             tokenSource = new CancellationTokenSource();
 
 #if !UNITY_VISIONOS
-            statusRoot.transform.SetParent(XRUIManager.Instance.headUIRoot, false);
+            statusRoot.transform.SetParent(XRUIManager.Instance.dynamicUIRoot, false);
             statusRoot.transform.localPosition = new Vector3(0, 0, 1);
 #endif
 
@@ -72,11 +212,57 @@ namespace NSYNK.HyperSlides
         }
 
         /// <summary>
+        /// Sets the current server connection based on the provided connection name. If the connection is not found, it falls back to the default connection
+        /// </summary>
+        /// <param name="connectionName">The name of the server connection to switch to</param>
+        public void SetServerConnection(string connectionName = "none")
+        {
+            ServerConnection connection = ServerConnections.Find(c => c.ConnectionName == connectionName);
+
+#if UNITY_EDITOR
+            // In editor, allow switching to custom connection profile with enum
+            connection = ServerConnections.Find(c => c.ConnectionName == EditorServerConnectionProfile.ToString());
+#endif
+
+            if (connection != null)
+            {
+                CurrentServerConnection = connection;
+                Debug.Log("Switched to server connection: " + JsonUtility.ToJson(CurrentServerConnection), Instance);
+            }
+            else
+            {
+                CurrentServerConnection = ServerConnections.FirstOrDefault();
+                Debug.LogWarning("Server connection not found: " + connectionName + " Switching to default connection: " + (CurrentServerConnection != null ? CurrentServerConnection.ConnectionName : "None"), Instance);
+            }
+        }
+
+        /// <summary>
+        /// Adds a new server connection to the list if it doesn't exist and sets it as the current connection
+        /// </summary>
+        /// <param name="serverConnection">The server connection to add and set</param>
+        public void AddNewConnectionAndSet(ServerConnection serverConnection)
+        {
+            if (serverConnection == null)
+            {
+                Debug.LogWarning("Cannot add null server connection.", Instance);
+                return;
+            }
+
+            if (!ServerConnections.Any(c => c.ConnectionName == serverConnection.ConnectionName))
+            {
+                Debug.LogWarning("Server connection not found: " + serverConnection.ConnectionName + " Adding to connections list.", Instance);
+                ServerConnections.Add(serverConnection);
+            }
+
+            SetServerConnection(serverConnection.ConnectionName);
+        }
+
+        /// <summary>
         /// Update the app state with a custom task that can be cancelled to avoid errors
         /// </summary>
         /// <param name="appState"></param>
         /// <param name="stateContext"></param>
-        public static async void UpdateAppState(AppState appState, string stateContext = "")
+        public async void UpdateAppState(AppState appState, string stateContext = "")
         {
             try
             {
@@ -91,8 +277,18 @@ namespace NSYNK.HyperSlides
             }
             catch (OperationCanceledException)
             {
-                Debug.Log("Task was cancelled.");
+                Debug.Log("Task was cancelled.", Instance);
             }
+        }
+
+        void FixedUpdate()
+        {
+            bool showStatusRoot =
+                XRNetworkManager.Instance.CurrentNetworkState != XRNetworkManager.NetworkState.JOINED &&
+                XRNetworkManager.Instance.CurrentNetworkState != XRNetworkManager.NetworkState.MATCHMAKING;
+
+            if (Instance.statusRoot != null && Instance.statusRoot.activeSelf != showStatusRoot)
+                Instance.statusRoot.SetActive(showStatusRoot);
         }
 
         /// <summary>
@@ -104,7 +300,7 @@ namespace NSYNK.HyperSlides
             tokenSource.Dispose();
         }
 
-        private static void CancelToken()
+        private void CancelToken()
         {
             tokenSource.Cancel();
         }
@@ -115,71 +311,41 @@ namespace NSYNK.HyperSlides
         /// <param name="newState">The new app state to assign and check for</param>
         /// <param name="stateContext">A custom string that can hold information for the current state (like joining a match)</param>
         /// <returns></returns>
-        private static async Task UpdateAppStateAsync(AppState newState, string stateContext)
+        private async Task UpdateAppStateAsync(AppState newState, string stateContext)
         {
             if (tokenSource.IsCancellationRequested)
                 return;
 
-            appState = newState;
+            CurrentAppState = newState;
 
             Dispatcher.Enqueue(() =>
             {
-                XRUIManager.Instance.HideAll();
-
-                SetStateIcon(appState);
+                SetStateIcon(CurrentAppState);
                 DisableInputfield();
-
-                Instance.statusRoot.SetActive(appState != AppState.ACTIVE_SESSION && appState != AppState.MATCHMAKING);
+                RemoveAllButtonInteractions();
             });
 
-            //Reset match and slides
-            if (
-                XRNetworkManager.match != null &&
-                appState != AppState.JOIN_SESSION &&
-                appState != AppState.ACTIVE_SESSION
-                )
-            {
-                Dispatcher.Enqueue(() => XRSlideManager.Instance.Reset());
-
-                await Awaitable.MainThreadAsync();
-                await XRNetworkManager.Instance.LeaveMatchAsync();
-            }
-
-            await Debug.LogQueue($"<b>{appState}</b>\n{stateContext}\n{exception}", Instance);
+            await Debug.LogQueue($"APP STATE: <b>{CurrentAppState}</b>\n{stateContext}\n{exception}", Instance);
             await Awaitable.MainThreadAsync();
 
-            Instance.inspectorAppState = appState;
-            stateUpdate?.Invoke(appState);
+            OnStateUpdate?.Invoke(CurrentAppState);
 
-            switch (appState)
+            if (CurrentAppState != AppState.RUNNING)
+                XRSlideManager.Instance.Reset();
+
+            switch (CurrentAppState)
             {
                 //The app start, nothing special
                 case AppState.STARTING:
                     await App_Starting();
                     break;
-                //The platform check for different scenes if needed
-                case AppState.PLATFORMCHECK:
-                    await App_Platformcheck();
-                    break;
                 //Setting up the device tracking methods
                 case AppState.DEVICE_SETUP:
-                    await App_DeviceSetup();
+                    await App_DeviceSetup(stateContext);
                     break;
                 //Connection to the web and nakama server
                 case AppState.CONNECTION_SETUP:
                     await App_ConnectionSetup();
-                    break;
-                //Show the matchmaking UI if auto connect is disabled
-                case AppState.MATCHMAKING:
-                    await App_Matchmaking();
-                    break;
-                //Join the current session or return to matchmaking
-                case AppState.JOIN_SESSION:
-                    await App_JoinSession(stateContext);
-                    break;
-                //User is in an active session
-                case AppState.ACTIVE_SESSION:
-                    await App_ActiveSession();
                     break;
                 //Possible fallback state to still show information
                 case AppState.ERROR:
@@ -188,13 +354,13 @@ namespace NSYNK.HyperSlides
             }
         }
 
-        public static void StopWithError(Exception e)
+        public void StopWithError(Exception e)
         {
             exception = e;
             UpdateAppState(AppState.ERROR);
         }
 
-        private static void SetStateIcon(AppState appState)
+        private void SetStateIcon(AppState appState)
         {
             AppStateIcon appStateIcon = Instance.appStateIcons.Find(i => i.state == appState);
 
@@ -204,105 +370,59 @@ namespace NSYNK.HyperSlides
             Instance.loadingIcon.gameObject.SetActive(appStateIcon != null);
         }
 
-        private static async Task App_Starting()
+        private async Task App_Starting()
         {
-            await Awaitable.MainThreadAsync();
-            await UpdateStateWithDelay("App started");
+            await Task.Delay(1);
 
-            UpdateAppState(AppState.PLATFORMCHECK);
+            UpdateAppState(AppState.DEVICE_SETUP);
         }
 
-        private static async Task App_Platformcheck()
+        private async Task App_DeviceSetup(string stateContext = "")
         {
-            try
+            await XRNetworkManager.Instance.UpdateNetworkStateAsync(XRNetworkManager.NetworkState.DISCONNECT);
+
+#if !UNITY_EDITOR
+            if (!DeviceInfo.Instance.UseStandaloneSetup)
             {
-                await UpdateStateWithAwaitable("Loading assets", DeviceInfo.LoadPlatformAssets());
+                await UpdateStateWithButton("Setting up tracking", new List<ButtonInteraction> {
+                new () {
+                        buttonText = "Skip Anchor setup",
+                        callback = () => {
+                            Debug.Log("Skipping Anchor Setup");
+                            HyperSlidesStateManager.Instance.Settings.trackingType = Settings.TrackingType.Free;
+                            XRAnchorManager.Instance.StartOverAnchorSetup();
+                        }
+                    }
+                });
 
-                UpdateAppState(AppState.DEVICE_SETUP);
+                await XRAnchorManager.Instance.Init();
+
+                if (XRAnchorManager.arSupported)
+                    await UpdateStateWithDelay("Enabled XR systems", loadingState: LoadingState.DONE);
             }
-            catch (Exception e)
-            {
-                StopWithError(e);
-            }
-        }
-
-        private static async Task App_DeviceSetup()
-        {
-            await UpdateStateWithDelay("Setting up tracking", loadingState: LoadingState.LOADING);
-
-            await XRAnchorManager.Instance.Init();
-
-            if (XRAnchorManager.arSupported)
-                await UpdateStateWithDelay("Enabled XR systems", loadingState: LoadingState.DONE);
-
-            if (!XRNetworkManager.IsConnected())
-                UpdateAppState(AppState.CONNECTION_SETUP);
             else
             {
-                if (!string.IsNullOrEmpty(XRNetworkManager.lastSessionStored))
-                    UpdateAppState(AppState.JOIN_SESSION, XRNetworkManager.lastSessionStored);
-                else
-                    await HandleAutoJoinSession();
+                HyperSlidesStateManager.Instance.Settings.trackingType = Settings.TrackingType.Free;
+                XRAnchorManager.Instance.StartOverAnchorSetup();
             }
+#endif
+
+            UpdateAppState(AppState.CONNECTION_SETUP, stateContext);
         }
 
-        private static async Task App_ConnectionSetup()
+        private async Task App_ConnectionSetup(string stateContext = "")
         {
             await UpdateStateWithTask("Connecting client", XRNetworkManager.Instance.Init());
 
             //Connect again when session code was changed
-            if (XRNetworkManager.newSessionCodeDetected)
-            {
-                XRNetworkManager.newSessionCodeDetected = false;
-                XRNetworkManager.Instance.Disconnect();
-                await UpdateStateWithTask("Connecting client to new node", XRNetworkManager.Instance.Init());
-            }
+            if (XRNetworkManager.Instance.NewSessionCodeDetected)
+                await UpdateStateWithTask("Connecting client to new node", XRNetworkManager.Instance.UpdateNetworkStateAsync(XRNetworkManager.NetworkState.RECONNECTING));
 
-            if (!XRNetworkManager.IsConnected())
-                UpdateText($"Can not connect to webserver ({XRNetworkManager.IsConnected()}).\nPlease check your network settings!");
-            else
-            {
-                if (!string.IsNullOrEmpty(XRNetworkManager.lastSessionStored))
-                    UpdateAppState(AppState.JOIN_SESSION, XRNetworkManager.lastSessionStored);
-                else
-                    await HandleAutoJoinSession();
-            }
+            UpdateAppState(AppState.RUNNING);
         }
 
-        private static async Task App_Matchmaking()
+        private async Task App_Error()
         {
-            await Awaitable.MainThreadAsync();
-
-            XRUIManager.Instance.LoadUserUI();
-            XRUIManager.Instance.InitMatchMakingUI();
-        }
-
-        private static async Task App_JoinSession(string stateContext)
-        {
-            await UpdateStateWithTask("Joining session", XRNetworkManager.Instance.JoinMatchAsync(stateContext));
-
-            if (XRNetworkManager.match != null)
-            {
-                await UpdateStateWithDelay("Session joined");
-                UpdateAppState(AppState.ACTIVE_SESSION);
-            }
-            else
-            {
-                await UpdateStateWithDelay("Can not join session\nstateContext");
-                UpdateAppState(AppState.MATCHMAKING);
-            }
-        }
-
-        private static async Task App_ActiveSession()
-        {
-            await Awaitable.MainThreadAsync();
-            XRUIManager.Instance.LoadUserUI(true);
-        }
-
-        private static async Task App_Error()
-        {
-            XRNetworkManager.Instance.Stop();
-
             await Awaitable.MainThreadAsync();
 
             if (exception != null)
@@ -319,21 +439,11 @@ namespace NSYNK.HyperSlides
             CancelToken();
         }
 
-        private static async Task HandleAutoJoinSession()
-        {
-            string autojoinSession = await XRNetworkManager.Instance.GetAutojoinSession();
-
-            if (string.IsNullOrEmpty(autojoinSession) || XRNetworkManager.stopAutoJoin)
-                UpdateAppState(AppState.MATCHMAKING);
-            else
-                UpdateAppState(AppState.JOIN_SESSION, autojoinSession);
-        }
-
         /// <summary>
         /// Update the state text and do not wait for any callback
         /// </summary>
         /// <param name="text">The text to be shown</param>
-        public static void UpdateStateTextOnly(string text)
+        public void UpdateStateTextOnly(string text)
         {
             UpdateText(text);
             DisableInputfield();
@@ -347,16 +457,75 @@ namespace NSYNK.HyperSlides
         /// <param name="text"></param>
         /// <param name="waitedResult"></param>
         /// <returns></returns>
-        public static async Task UpdateStateWithAwaitable(string text, Awaitable waitedResult) => await UpdateWaitingText(text, waitedResult);
-        public static async Task UpdateStateWithTask(string text, Task waitedResult) => await UpdateWaitingText(text, waitedResult);
-        public static async Task UpdateStateWithBool(string text, Func<bool> awaitBool) => await UpdateWaitingText(text, awaitBool);
+        public async Awaitable UpdateStateWithAwaitable(string text, Awaitable waitedResult) => await UpdateWaitingText(text, waitedResult);
+        public async Awaitable UpdateStateWithTask(string text, Task waitedResult) => await UpdateWaitingText(text, waitedResult);
+        public async Awaitable UpdateStateWithBool(string text, Func<bool> awaitBool) => await UpdateWaitingText(text, awaitBool);
+        public async Awaitable UpdateStateWithButton(string text, List<ButtonInteraction> buttonInteractions, bool needsConfirmation = false) => await UpdateWithButtonAction(text, buttonInteractions, needsConfirmation);
 
-        private static async Task UpdateWaitingText<T>(string text, T waitedResult)
+        private async Awaitable UpdateWaitingText<T>(string text, T waitedResult)
         {
             UpdateText(text);
 
             await UpdateLoadingIndicator(LoadingState.LOADING);
 
+            await AwaitResultToContinue(waitedResult);
+
+            await UpdateLoadingIndicator(LoadingState.DONE);
+
+            DisableInputfield();
+        }
+
+        /// <summary>
+        /// Update the current state and text with button interactions that can be confirmed to continue
+        /// </summary>
+        /// <param name="text">The text to display</param>
+        /// <param name="buttonInteractions">The list of button interactions</param>
+        /// <param name="needsConfirmation">Whether confirmation is needed for any input or not</param>
+        /// <returns></returns>
+        private async Awaitable UpdateWithButtonAction(string text, List<ButtonInteraction> buttonInteractions, bool needsConfirmation = false)
+        {
+            UpdateText(text);
+
+            bool isConfirmed = false;
+
+            RemoveAllButtonInteractions();
+
+            foreach (var buttonInteraction in buttonInteractions)
+            {
+                UIButton buttonInstance = Instantiate(Instance.interactionButton, Instance.loadingIconHolder.transform.parent, false);
+
+                buttonInstance.GetComponentInChildren<TMPro.TextMeshProUGUI>().text = buttonInteraction.buttonText;
+                buttonInstance.onClick.AddListener(buttonInteraction.callback);
+
+                if (needsConfirmation)
+                    buttonInstance.onClick.AddListener(() => isConfirmed = true);
+
+                Instance.interactionButtons.Add(buttonInstance);
+            }
+
+            if (needsConfirmation)
+                await AwaitResultToContinue<Func<bool>>(() => isConfirmed);
+
+            await UpdateLoadingIndicator(LoadingState.NONE);
+        }
+
+        /// <summary>
+        /// Remove all button interactions from the status UI
+        /// </summary>
+        public void RemoveAllButtonInteractions()
+        {
+            Instance.interactionButtons.ForEach(b => Destroy(b.gameObject));
+            Instance.interactionButtons.Clear();
+        }
+
+        /// <summary>
+        /// Wait for a result to be completed, can be a Task, Awaitable or Func<bool>
+        /// </summary>
+        /// <typeparam name="T">The type of the waited result</typeparam>
+        /// <param name="waitedResult">The result to wait for</param>
+        /// <returns>Returns a task with a boolean indicating completion</returns>
+        private async Task AwaitResultToContinue<T>(T waitedResult)
+        {
             bool isDone = false;
 
             while (!isDone)
@@ -374,22 +543,28 @@ namespace NSYNK.HyperSlides
                         break;
                 }
 
-                await Task.Delay(500);
+                await Task.Delay(10);
             }
-
-            await UpdateLoadingIndicator(LoadingState.DONE);
-
-            DisableInputfield();
         }
 
-        public static void EnableInputfield(string placeholder, UnityAction<string> callback)
+        public void EnableInputfield(string placeholder, UnityAction<string> callback)
         {
+            EnableInputfield(placeholder, 0, callback);
+        }
+
+        public void EnableInputfield(string placeholder, int characterLimit, UnityAction<string> callback)
+        {
+            int defaultCharacterLimit = Instance.inputField.characterLimit;
+            Instance.inputField.characterLimit = characterLimit > 0 ? characterLimit : defaultCharacterLimit;
+
             Instance.inputField.gameObject.SetActive(true);
             Instance.inputField.text = placeholder;
+            Instance.inputField.onEndEdit.RemoveAllListeners();
             Instance.inputField.onEndEdit.AddListener(callback);
+            Instance.inputField.onEndEdit.AddListener((_) => Instance.inputField.characterLimit = defaultCharacterLimit);
         }
 
-        public static void DisableInputfield()
+        public void DisableInputfield()
         {
             Dispatcher.Enqueue(() =>
             {
@@ -404,7 +579,7 @@ namespace NSYNK.HyperSlides
         /// <param name="text">The text shown in the center of the screen</param>
         /// <param name="delay">The delay in seconds</param>
         /// <returns></returns>
-        public static async Task UpdateStateWithDelay(string text, float delay = .5f, LoadingState loadingState = LoadingState.DONE)
+        public async Task UpdateStateWithDelay(string text, float delay = .5f, LoadingState loadingState = LoadingState.DONE)
         {
             UpdateText(text);
             await UpdateLoadingIndicator(loadingState);
@@ -419,11 +594,11 @@ namespace NSYNK.HyperSlides
         /// Update user UI text for stati
         /// </summary>
         /// <param name="text">The text shown in the center of the screen</param>
-        private static void UpdateText(string text = "")
+        private void UpdateText(string text = "")
         {
             Dispatcher.Enqueue(() =>
             {
-                if (appState == AppState.ERROR)
+                if (CurrentAppState == AppState.ERROR)
                     Instance.statusText.fontSize = 8;
 
 #if UNITY_EDITOR
@@ -434,7 +609,7 @@ namespace NSYNK.HyperSlides
             });
         }
 
-        private static async Task UpdateLoadingIndicator(LoadingState loadingState)
+        private async Task UpdateLoadingIndicator(LoadingState loadingState)
         {
             Dispatcher.Enqueue(() =>
             {
@@ -445,6 +620,54 @@ namespace NSYNK.HyperSlides
 
             await Task.Delay(500);
             await Awaitable.MainThreadAsync();
+        }
+
+        /// <summary>
+        /// Handles custom notifications from the Nakama server.
+        /// </summary>
+        /// <param name="notification"></param>
+        private void HandleCustomNotification(IApiNotification notification)
+        {
+            try
+            {
+                JObject contentObj = JObject.Parse(notification.Content);
+                string dataString = contentObj["data"]?.Value<string>();
+                JObject dataObj = JObject.Parse(dataString);
+
+                string settingName = dataObj[0]?.Value<string>();
+                string settingValue = dataObj[1]?.Value<string>();
+
+                OverrideSettings(settingName, settingValue);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"Failed to parse custom notification: {e.Message}");
+                return;
+            }
+        }
+
+        /// <summary>
+        /// Overrides a specific setting in the Settings class.
+        /// </summary>
+        /// <param name="settingName"></param>
+        /// <param name="settingValue"></param>
+        private void OverrideSettings(string settingName, string settingValue)
+        {
+            foreach (var setting in Settings.GetType().GetFields())
+            {
+                if (setting.Name == settingName)
+                {
+                    try
+                    {
+                        setting.SetValue(Settings, Convert.ChangeType(settingValue, setting.FieldType));
+                        Debug.Log($"Setting {setting.Name} overridden with value: {settingValue}");
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning($"Failed to override setting {setting.Name}: {e.Message}");
+                    }
+                }
+            }
         }
     }
 }

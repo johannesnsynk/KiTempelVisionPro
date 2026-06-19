@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using NSYNK.HyperSlides.Core;
 using NSYNK.HyperSlides.Network;
@@ -17,6 +18,10 @@ namespace NSYNK.HyperSlides.Runtime
 {
     public class XRCameraManager : Singleton<XRCameraManager>
     {
+        public static Camera CurrentCamera => DeviceInfo.Instance.Role == XRPlayer.Role.Simulation ? Instance.spectatorCamera : Instance.mainCamera;
+
+        public List<CameraSettings> cameraSettings;
+
         [HideInInspector]
         public Camera mainCamera, spectatorCamera;
 
@@ -32,16 +37,14 @@ namespace NSYNK.HyperSlides.Runtime
 
 #if UNITY_VISIONOS
         public delegate void WindowUpdateEvent(VolumeCamera.WindowState state);
-        public static WindowUpdateEvent windowUpdateEvent;
-        public static VolumeCamera.WindowEvent lastEvent = VolumeCamera.WindowEvent.Opened;
+        public WindowUpdateEvent OnWindowUpdate;
+        public VolumeCamera.WindowEvent lastEvent = VolumeCamera.WindowEvent.Opened;
 
         private VolumeCamera volumeCamera;
 #endif
 
-        public override void Awake()
+        protected override void OnSingletonAwake()
         {
-            base.Awake();
-
             mainCamera = Camera.main;
 
             xrOriginParent = mainCamera.transform.parent;
@@ -56,7 +59,11 @@ namespace NSYNK.HyperSlides.Runtime
             storedCamera.depth = -1;
         }
 
+#if UNITY_VISIONOS
         private async void Start()
+#else
+        private void Start()
+#endif
         {
             if (!spectatorCamera)
                 spectatorCamera = Instantiate(spectatorCameraPrefab, XRContentRoot.Instance.transform, false).GetComponent<Camera>();
@@ -68,14 +75,14 @@ namespace NSYNK.HyperSlides.Runtime
 #endif
         }
 
-        private void OnEnable() => XRNetworkManager.onUserConnected += SetupSpectatorCameras;
-        private void OnDisable() => XRNetworkManager.onUserConnected -= SetupSpectatorCameras;
+        private void OnEnable() => XRNetworkManager.Instance.OnUserConnected += SetupSpectatorCameras;
+        private void OnDisable() => XRNetworkManager.Instance.OnUserConnected -= SetupSpectatorCameras;
 
         public void SetupSpectatorCameras()
         {
             Dispatcher.Enqueue(() =>
             {
-                bool isSpectator = DeviceInfo.Role == XRPlayer.Role.Simulation;
+                bool isSpectator = DeviceInfo.Instance.Role == XRPlayer.Role.Simulation;
 
                 if (probeManager)
                     probeManager.enabled = !isSpectator;
@@ -104,6 +111,8 @@ namespace NSYNK.HyperSlides.Runtime
 
             mainCamera.transform.localPosition = spectator ? Vector3.zero : mainCamera.transform.localPosition;
             mainCamera.transform.localRotation = spectator ? Quaternion.identity : mainCamera.transform.localRotation;
+
+            UpdateCameraSettings();
         }
 
         private void SetSpectatorCamera(bool spectator)
@@ -115,18 +124,18 @@ namespace NSYNK.HyperSlides.Runtime
 
             if (spectator && !spectatorCameraData.cameraStack.Contains(mainCamera))
                 spectatorCameraData.cameraStack.Add(mainCamera);
-            else if(!spectator && spectatorCameraData.cameraStack.Contains(mainCamera))
+            else if (!spectator && spectatorCameraData.cameraStack.Contains(mainCamera))
                 spectatorCameraData.cameraStack.Remove(mainCamera);
         }
 
         public void UpdateXROriginPosition(float duration)
         {
-            if (XRNetworkManager.localPlayer && XRSlideManager.CurrentPresentation != null && spectatorCamera)
+            if (XRNetworkManager.Instance.LocalPlayer && XRSlideManager.Instance.CurrentPresentation != null && spectatorCamera)
             {
-                if (DeviceInfo.Role == XRPlayer.Role.Simulation)
+                if (DeviceInfo.Instance.Role == XRPlayer.Role.Simulation)
                 {
-                    Vector3 nextPosition = XRSlideManager.GetCurrentSlide().cameraTransform.location;
-                    Quaternion nextRotation = Quaternion.Euler(XRSlideManager.GetCurrentSlide().cameraTransform.rotation);
+                    Vector3 nextPosition = XRSlideManager.Instance.GetCurrentSlide().cameraTransform.location;
+                    Quaternion nextRotation = Quaternion.Euler(XRSlideManager.Instance.GetCurrentSlide().cameraTransform.rotation);
 
                     this.Animate(spectatorCamera.transform, Easing.AnimationType.LocalPosition, Easing.Ease.EaseInOutQuad, spectatorCamera.transform.localPosition, nextPosition, duration);
                     this.Animate(spectatorCamera.transform, Easing.RotationType.Local, Easing.Ease.EaseInOutQuad, startRotation: spectatorCamera.transform.localRotation, nextRotation, duration, 0);
@@ -161,10 +170,41 @@ namespace NSYNK.HyperSlides.Runtime
 
         private void OnVolumeCameraUpdate(VolumeCamera camera, VolumeCamera.WindowState state)
         {
-            Debug.Log("New window event: " + state.WindowEvent, Instance);
-            windowUpdateEvent?.Invoke(state);
-            lastEvent = state.WindowEvent;
+            // Local function to normalize Opened/Focused to Focused
+            VolumeCamera.WindowEvent Normalize(VolumeCamera.WindowEvent e) =>
+                (e == VolumeCamera.WindowEvent.Opened || e == VolumeCamera.WindowEvent.Focused)
+                    ? VolumeCamera.WindowEvent.Focused
+                    : e;
+
+            if (Normalize(state.WindowEvent) != Normalize(lastEvent))
+            {
+                Debug.Log("New window event: " + state.WindowEvent, Instance);
+                OnWindowUpdate?.Invoke(state);
+                lastEvent = state.WindowEvent;
+            }
         }
 #endif
+
+        /// <summary>
+        /// Update camera settings based on platform-specific configurations
+        /// </summary>
+        private void UpdateCameraSettings()
+        {
+            CameraSettings settings = cameraSettings.Find(s => s.platform == Application.platform);
+
+            if (settings == null || CurrentCamera == null)
+                return;
+
+            UniversalAdditionalCameraData cameraData = CurrentCamera.GetUniversalAdditionalCameraData();
+            cameraData.renderPostProcessing = settings.renderPostProcessing;
+            cameraData.antialiasing = settings.antialiasingMode;
+
+            if (settings.antialiasingMode == AntialiasingMode.TemporalAntiAliasing)
+            {
+                cameraData.taaSettings.contrastAdaptiveSharpening = settings.TAAContrastAdaptiveSharpening;
+            }
+
+            Debug.Log($"Applied camera settings for {Application.platform}: PP {settings.renderPostProcessing}, AA {settings.antialiasingMode}, TAA Sharpness {settings.TAAContrastAdaptiveSharpening}", this);
+        }
     }
 }
