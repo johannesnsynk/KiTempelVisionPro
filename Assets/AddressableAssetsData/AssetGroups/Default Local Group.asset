@@ -14,7 +14,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
   m_GroupName: Default Local Group
   m_GUID: 9d1410044058544cda28860451cf0d68
-  m_SerializeEntries: []
+  m_SerializeEntries:
+  - m_GUID: 6479cfeb64bd5462f8faa40ac4140842
+    m_Address: Assets/prefabs/LiveKitSDK.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   m_ReadOnly: 0
   m_Settings: {fileID: 11400000, guid: 8c9751c4aae8d4fe9a13d34b8820dd04, type: 2}
   m_SchemaSet:
