@@ -8,6 +8,8 @@ private var room: Room?
 private var roomDelegate: BridgeRoomDelegate?
 private var logCallback: LkStringCallback?
 private var eventCallback: LkStringCallback?
+private var latestAudioLevel: Float = 0
+private var audioLevelPumpTask: Task<Void, Never>?
 
 private final class BridgeRoomDelegate: NSObject, RoomDelegate {
     func room(_ room: Room, participantDidConnect participant: RemoteParticipant) {
@@ -20,6 +22,54 @@ private final class BridgeRoomDelegate: NSObject, RoomDelegate {
         guard let state = attributes["lk.agent.state"], !state.isEmpty else { return }
         emitEvent("agent-state:\(state)")
     }
+
+    func room(_ room: Room, didUpdateSpeakingParticipants participants: [Participant]) {
+        let speakingBridge = participants
+            .compactMap { $0 as? RemoteParticipant }
+            .first { isBridgeParticipant($0) }
+
+        if let speakingBridge {
+            let level = max(0, min(1, Float(speakingBridge.audioLevel) * 2.0))
+            latestAudioLevel = level
+            return
+        }
+
+        latestAudioLevel = 0
+    }
+
+    func room(_ room: Room,
+              participant: RemoteParticipant?,
+              didReceiveData data: Data,
+              forTopic topic: String,
+              encryptionType: EncryptionType) {
+        guard topic == "bridge.audio.level" || topic == "bridge.audio.status" else { return }
+
+        if let participant, !isBridgeParticipant(participant) {
+            return
+        }
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+        guard let event = json["event"] as? String else { return }
+        guard event == "audio_level" else { return }
+
+        if let numericLevel = json["level"] as? NSNumber {
+            latestAudioLevel = max(0, min(1, numericLevel.floatValue))
+            return
+        }
+
+        if let stringLevel = json["level"] as? String, let parsed = Float(stringLevel) {
+            latestAudioLevel = max(0, min(1, parsed))
+        }
+    }
+}
+
+private func isBridgeParticipant(_ participant: RemoteParticipant) -> Bool {
+    let identity = String(describing: participant.identity).lowercased()
+    if identity == "audio-bridge-bot" || identity.contains("bridge") {
+        return true
+    }
+
+    return participant.trackPublications.values.contains { $0.name == "bridge-audio" }
 }
 
 private func emitLog(_ message: String) {
@@ -30,6 +80,31 @@ private func emitLog(_ message: String) {
 private func emitEvent(_ message: String) {
     guard let callback = eventCallback else { return }
     message.withCString { callback($0) }
+}
+
+private func startAudioLevelPump() {
+    stopAudioLevelPump()
+
+    audioLevelPumpTask = Task {
+        var lastLogNs: UInt64 = 0
+        while !Task.isCancelled {
+            let level = max(0, min(1, latestAudioLevel))
+            emitEvent(String(format: "audio-level:%.4f", level))
+
+            let now = DispatchTime.now().uptimeNanoseconds
+            if now - lastLogNs >= 1_000_000_000 {
+                lastLogNs = now
+                emitLog(String(format: "[BridgeAudio] level=%.4f", level))
+            }
+
+            try? await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+}
+
+private func stopAudioLevelPump() {
+    audioLevelPumpTask?.cancel()
+    audioLevelPumpTask = nil
 }
 
 private func requestMicrophonePermission() async -> Bool {
@@ -98,6 +173,7 @@ public func lk_visionos_connect(_ serverUrlPtr: UnsafePointer<CChar>?, _ tokenPt
 
     Task {
         do {
+            latestAudioLevel = 0
             let roomInstance = Room()
             room = roomInstance
             let delegate = BridgeRoomDelegate()
@@ -105,6 +181,7 @@ public func lk_visionos_connect(_ serverUrlPtr: UnsafePointer<CChar>?, _ tokenPt
             roomInstance.add(delegate: delegate)
 
             try await roomInstance.connect(url: serverUrl, token: token)
+            startAudioLevelPump()
 
             emitEvent("connected")
         } catch {
@@ -120,6 +197,8 @@ public func lk_visionos_connect(_ serverUrlPtr: UnsafePointer<CChar>?, _ tokenPt
 public func lk_visionos_disconnect() {
     Task {
         await room?.disconnect()
+        stopAudioLevelPump()
+        latestAudioLevel = 0
         roomDelegate = nil
         room = nil
         emitEvent("disconnected")

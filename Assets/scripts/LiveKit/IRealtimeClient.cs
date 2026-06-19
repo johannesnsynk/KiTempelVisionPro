@@ -8,6 +8,7 @@ public interface IRealtimeClient : IDisposable
     Room ManagedRoom { get; }
     bool IsConnected { get; }
     event Action<string> AgentStateChanged;
+    event Action<float> AgentAudioLevelChanged;
 
     IEnumerator Connect(TokenSourceComponent tokenSourceComponent, string roomName, string participantName, string participantIdentity);
     bool SetMicrophoneCaptureEnabled(bool enabled);

@@ -64,6 +64,12 @@ public class LiveKitManager : MonoBehaviour
     private InputAction _pushToTalkAction;
     private bool _isPushToTalkPressed;
     private bool _isMicrophoneCaptureActive;
+    private volatile float _bridgeRawAudioLevel;
+    private float _bridgeSmoothedAudioLevel;
+    private const float BridgeAttack = 18f;
+    private const float BridgeRelease = 8f;
+    private bool _bridgeFirstLevelLogged;
+    private bool _bridgeFirstNonZeroLogged;
 
     // We keep track of the last delivered message from each owner to avoid showing duplicates in the chat log
     private readonly Dictionary<string, string> _lastDeliveredMessageByOwner = new Dictionary<string, string>();
@@ -100,6 +106,10 @@ public class LiveKitManager : MonoBehaviour
     private void Update()
     {
         _realtimeClient?.PumpEvents();
+
+        float target = _bridgeRawAudioLevel;
+        float speed = target > _bridgeSmoothedAudioLevel ? BridgeAttack : BridgeRelease;
+        _bridgeSmoothedAudioLevel = Mathf.MoveTowards(_bridgeSmoothedAudioLevel, target, speed * Time.unscaledDeltaTime);
     }
 
     private IEnumerator ConnectRealtime(string reason)
@@ -127,6 +137,7 @@ public class LiveKitManager : MonoBehaviour
 
         string connectIdentity = ResolveConnectParticipantIdentity();
         _realtimeClient.AgentStateChanged += OnRealtimeAgentStateChanged;
+        _realtimeClient.AgentAudioLevelChanged += OnBridgeAudioLevelChanged;
         yield return _realtimeClient.Connect(_tokenSourceComponent, _roomName, _participantName, connectIdentity);
 
         _connectionDetails = _realtimeClient.ConnectionDetails;
@@ -142,6 +153,7 @@ public class LiveKitManager : MonoBehaviour
         if (_room == null)
         {
             Debug.Log("Connected via native bridge backend (no managed Room available in C#). Reason=" + reason);
+            SetupSalsaForBridgeMode();
             ApplyPushToTalkState();
             _connectRoutine = null;
             yield break;
@@ -170,7 +182,10 @@ public class LiveKitManager : MonoBehaviour
         CleanupLocalMicrophone();
 
         if (_realtimeClient != null)
+        {
             _realtimeClient.AgentStateChanged -= OnRealtimeAgentStateChanged;
+            _realtimeClient.AgentAudioLevelChanged -= OnBridgeAudioLevelChanged;
+        }
 
         if (_room != null)
         {
@@ -391,6 +406,40 @@ public class LiveKitManager : MonoBehaviour
     private void OnRealtimeAgentStateChanged(string agentState)
     {
         ApplyAgentState(agentState);
+    }
+
+    private void OnBridgeAudioLevelChanged(float level)
+    {
+        _bridgeRawAudioLevel = Mathf.Clamp01(level);
+
+        if (!_bridgeFirstLevelLogged)
+        {
+            _bridgeFirstLevelLogged = true;
+            Debug.Log("[BridgeAudio] First audio-level event received.");
+        }
+
+        if (!_bridgeFirstNonZeroLogged && _bridgeRawAudioLevel > 0.0001f)
+        {
+            _bridgeFirstNonZeroLogged = true;
+            Debug.Log("[BridgeAudio] First non-zero audio-level=" + _bridgeRawAudioLevel.ToString("F4"));
+        }
+    }
+
+    private float GetBridgeAnalysisValue()
+    {
+        return _bridgeSmoothedAudioLevel;
+    }
+
+    private void SetupSalsaForBridgeMode()
+    {
+        if (salsaLipSync == null)
+            return;
+
+        salsaLipSync.useExternalAnalysis = true;
+        salsaLipSync.getExternalAnalysis = GetBridgeAnalysisValue;
+        _bridgeFirstLevelLogged = false;
+        _bridgeFirstNonZeroLogged = false;
+        Debug.Log("SALSA bridge-mode external analysis enabled.");
     }
 
     private void ApplyAgentState(string agentState)

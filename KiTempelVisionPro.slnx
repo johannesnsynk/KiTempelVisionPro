@@ -1,10 +1,10 @@
 ﻿<Solution>
-  <Project Path="NSYNK.Hyperslides.Runtime.csproj" />
+  <Project Path="NSYNK.HyperSlides.Runtime.csproj" />
   <Project Path="TiltBrushToolkitEditor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="TiltBrushToolkitThirdPartyEditor.csproj" />
   <Project Path="NakamaEditor.csproj" />
-  <Project Path="NSYNK.Hyperslides.Editor.csproj" />
+  <Project Path="NSYNK.HyperSlides.Editor.csproj" />
   <Project Path="Assembly-CSharp-firstpass.csproj" />
   <Project Path="Unity.XR.Interaction.Toolkit.Samples.StarterAssets.csproj" />
   <Project Path="TiltBrushToolkitRuntime.csproj" />

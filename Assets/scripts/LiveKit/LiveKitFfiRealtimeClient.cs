@@ -10,6 +10,10 @@ public sealed class LiveKitFfiRealtimeClient : IRealtimeClient
     public bool IsConnected { get; private set; }
     public event Action<string> AgentStateChanged;
 
+#pragma warning disable 67
+    public event Action<float> AgentAudioLevelChanged;
+#pragma warning restore 67
+
     public IEnumerator Connect(TokenSourceComponent tokenSourceComponent, string roomName, string participantName, string participantIdentity)
     {
         TaskYieldInstruction<ConnectionDetails> connectionDetailTask = tokenSourceComponent.FetchConnectionDetails(new TokenSourceFetchOptions

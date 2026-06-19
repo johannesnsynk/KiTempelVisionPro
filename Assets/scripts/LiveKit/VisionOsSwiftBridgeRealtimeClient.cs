@@ -40,6 +40,7 @@ public sealed class VisionOsSwiftBridgeRealtimeClient : IRealtimeClient
     public Room ManagedRoom => null;
     public bool IsConnected { get; private set; }
     public event Action<string> AgentStateChanged;
+    public event Action<float> AgentAudioLevelChanged;
 
     public IEnumerator Connect(TokenSourceComponent tokenSourceComponent, string roomName, string participantName, string participantIdentity)
     {
@@ -243,6 +244,15 @@ public sealed class VisionOsSwiftBridgeRealtimeClient : IRealtimeClient
             string state = eventMessage.Substring("agent-state:".Length).Trim();
             if (!string.IsNullOrWhiteSpace(state))
                 AgentStateChanged?.Invoke(state);
+
+            return;
+        }
+
+        if (eventMessage.StartsWith("audio-level:", StringComparison.Ordinal))
+        {
+            string value = eventMessage.Substring("audio-level:".Length).Trim();
+            if (float.TryParse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float level))
+                AgentAudioLevelChanged?.Invoke(Mathf.Clamp01(level));
 
             return;
         }
