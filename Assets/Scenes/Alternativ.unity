@@ -2273,8 +2273,10 @@ MonoBehaviour:
   DissolveOutDuration: 1
   dissolveNormalized: 0
   dissolveInOut: 0
+  visibilityState: 0
   visibilityStateEvents: []
   triggerEvents: []
+  audioEvents: []
   assetIsValid: 0
   assetReference:
     m_AssetGUID: 
@@ -2285,6 +2287,7 @@ MonoBehaviour:
   AssetActive: 0
   IsLoading: 0
   rootContent: {fileID: 0}
+  guid: f195eac1-e665-4dd2-93db-4edb5a36d365
 --- !u!1 &248604192
 GameObject:
   m_ObjectHideFlags: 0
@@ -4173,6 +4176,10 @@ PrefabInstance:
       propertyPath: m_ApplyRootMotion
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 6602508436842350390, guid: db4d1969314adf143bd9d0b6cf4193d4, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 7b392aae208d2433e86bff7fb53d5257, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
@@ -4351,7 +4358,7 @@ MonoBehaviour:
   emphasizerTrigger: 0
   analysisValue: 0
   sampleSize: 512
-  audioUpdateDelay: 0.08
+  audioUpdateDelay: 0.2017
   playheadBias: 2800
   autoAdjustAnalysis: 1
   autoAdjustMicrophone: 0
@@ -7381,8 +7388,10 @@ MonoBehaviour:
   DissolveOutDuration: 1
   dissolveNormalized: 0
   dissolveInOut: 0
+  visibilityState: 0
   visibilityStateEvents: []
   triggerEvents: []
+  audioEvents: []
   assetIsValid: 1
   assetReference:
     m_AssetGUID: 6479cfeb64bd5462f8faa40ac4140842
@@ -7393,6 +7402,7 @@ MonoBehaviour:
   AssetActive: 0
   IsLoading: 0
   rootContent: {fileID: 0}
+  guid: 2a2a332b-b8d1-46a9-9f38-cf9e8f858c84
 --- !u!1001 &698282563
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -12510,13 +12520,7 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 4652437271628025921, guid: 2a522329206c64b05a7b384c7220b47b, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
-    - targetCorrespondingSourceObject: {fileID: 3797964269849002702, guid: 2a522329206c64b05a7b384c7220b47b, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 0}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2a522329206c64b05a7b384c7220b47b, type: 3}
 --- !u!1 &1130609587
 GameObject:
@@ -18837,8 +18841,10 @@ MonoBehaviour:
   DissolveOutDuration: 1
   dissolveNormalized: 0
   dissolveInOut: 0
+  visibilityState: 0
   visibilityStateEvents: []
   triggerEvents: []
+  audioEvents: []
   assetIsValid: 0
   assetReference:
     m_AssetGUID: 
@@ -18849,6 +18855,7 @@ MonoBehaviour:
   AssetActive: 0
   IsLoading: 0
   rootContent: {fileID: 0}
+  guid: 674fc2ff-5a08-4d2f-bae2-a7207435825c
 --- !u!1001 &1827630738
 PrefabInstance:
   m_ObjectHideFlags: 0

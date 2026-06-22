@@ -99,3 +99,5 @@ embed_framework "$WEBRTC_SRC"
 - `NO_LIVEKIT_MODE` is set before export.
 - LiveKit package is added and linked to `UnityFramework`.
 - Run Script phase is added to `Unity-VisionOS` and contains the script above.
+- Remove the Share Extension and be sure to set the correct app bundle depending on the dev account
+- Remove the app group from the main target Unity-VisionOS, as we do not need it
