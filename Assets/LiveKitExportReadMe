@@ -25,17 +25,19 @@ In Xcode, go to:
 
 **Target -> Unity-VisionOS -> Build Phases**
 
-Add a new **Run Script** phase and paste the following script:
+Add a new **Run Script** phase and paste the following script.
+
+Important for Archive/App Distribution:
+- Put this Run Script **before** the final Code Sign step.
+- Do **not** copy frameworks into `UnityFramework.framework/Frameworks` (nested frameworks break distribution validation).
 
 ```sh
 #!/bin/sh
 set -euo pipefail
 
 APP_FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}"
-UNITY_FRAMEWORKS_DIR="${TARGET_BUILD_DIR}/UnityFramework.framework/Frameworks"
 
 mkdir -p "$APP_FRAMEWORKS_DIR"
-mkdir -p "$UNITY_FRAMEWORKS_DIR"
 
 find_framework() {
 	local framework_name="$1"
@@ -59,13 +61,13 @@ embed_framework() {
 	local name
 	name="$(basename "$src")"
 
-	for dst in "$APP_FRAMEWORKS_DIR" "$UNITY_FRAMEWORKS_DIR"; do
-		rm -rf "${dst:?}/${name}"
-		cp -R "$src" "$dst/"
-		if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
-			/usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --preserve-metadata=identifier,entitlements "${dst}/${name}"
-		fi
-	done
+	rm -rf "${APP_FRAMEWORKS_DIR:?}/${name}"
+	cp -R "$src" "$APP_FRAMEWORKS_DIR/"
+
+	# Sign copied framework when an identity is available (Archive/Release).
+	if [ -n "${EXPANDED_CODE_SIGN_IDENTITY:-}" ]; then
+		/usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --preserve-metadata=identifier,entitlements "${APP_FRAMEWORKS_DIR}/${name}"
+	fi
 }
 
 LIVEKIT_SRC="$(find_framework "LiveKit.framework" || true)"
@@ -98,6 +100,7 @@ embed_framework "$WEBRTC_SRC"
 
 - `NO_LIVEKIT_MODE` is set before export.
 - LiveKit package is added and linked to `UnityFramework`.
-- Run Script phase is added to `Unity-VisionOS` and contains the script above.
+- Run Script phase is added to `Unity-VisionOS`, placed before final Code Sign, and contains the script above.
+- Script copies frameworks only to `${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}` (not to `UnityFramework.framework/Frameworks`).
 - Remove the Share Extension and be sure to set the correct app bundle depending on the dev account
 - Remove the app group from the main target Unity-VisionOS, as we do not need it
